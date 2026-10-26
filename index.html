@@ -5,13 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0f2942" />
-    <meta name="description" content="PULSO: Offline-first Disaster Preparedness, Resilience, and Livelihood Intelligence System for Marinduque" />
+    <meta name="description" content="PULSO: Marinduque emergency reporting" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
-    <title>PULSO — Marinduque Resilience & Livelihood Intelligence</title>
+    <title>PULSO — Marinduque emergency reporting</title>
   </head>
   <body class="bg-sand-50 text-charcoal-900 font-sans antialiased selection:bg-marine-800 selection:text-white">
     <div id="root"></div>
@@ -19,7 +19,9 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('/sw.js').catch((error) => {
+            console.error('Service worker registration failed', error);
+          });
         });
       }
     </script>

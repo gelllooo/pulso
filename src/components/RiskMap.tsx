@@ -17,6 +17,65 @@ import {
   Info
 } from 'lucide-react';
 import L from 'leaflet';
+import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
+
+type Coordinate = [number, number];
+type ProvincePolygon = Coordinate[][];
+
+interface ProvinceBoundary {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    geometry: {
+      type: 'Polygon' | 'MultiPolygon';
+      coordinates: ProvincePolygon | ProvincePolygon[];
+    };
+  }>;
+}
+
+const isPointInRing = ([longitude, latitude]: Coordinate, ring: Coordinate[]): boolean => {
+  let inside = false;
+
+  for (let index = 0, previousIndex = ring.length - 1; index < ring.length; previousIndex = index++) {
+    const [currentLongitude, currentLatitude] = ring[index];
+    const [previousLongitude, previousLatitude] = ring[previousIndex];
+    const intersects =
+      currentLatitude > latitude !== previousLatitude > latitude &&
+      longitude <
+        ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
+          (previousLatitude - currentLatitude) +
+          currentLongitude;
+
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
+};
+
+const isPointInPolygon = ([longitude, latitude]: Coordinate, polygon: ProvincePolygon): boolean => {
+  const [outerRing, ...holes] = polygon;
+  return (
+    isPointInRing([longitude, latitude], outerRing) &&
+    !holes.some((hole) => isPointInRing([longitude, latitude], hole))
+  );
+};
+
+const isPointInProvince = ([longitude, latitude]: Coordinate, boundary: ProvinceBoundary): boolean =>
+  boundary.features.some((feature) => {
+    if (feature.geometry.type === 'Polygon') {
+      return isPointInPolygon([longitude, latitude], feature.geometry.coordinates as ProvincePolygon);
+    }
+
+    return (feature.geometry.coordinates as ProvincePolygon[]).some((polygon) =>
+      isPointInPolygon([longitude, latitude], polygon)
+    );
+  });
+
+const loadGoogleMaps = async (apiKey: string): Promise<typeof google.maps> => {
+  setOptions({ key: apiKey, v: 'weekly' });
+  await importLibrary('maps');
+  return google.maps;
+};
 
 export const RiskMap: React.FC = () => {
   const { reports, facilities, selectedMunicipalityFilter, setSelectedMunicipalityFilter, setActiveTab } = useApp();
@@ -33,9 +92,22 @@ export const RiskMap: React.FC = () => {
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const facilitiesLayerRef = useRef<L.LayerGroup | null>(null);
   const hazardLayerRef = useRef<L.LayerGroup | null>(null);
+  const provinceBoundaryRef = useRef<ProvinceBoundary | null>(null);
+  const googleMapRef = useRef<google.maps.Map | null>(null);
+  const googleOverlaysRef = useRef<Array<google.maps.Marker | google.maps.Polygon>>([]);
+  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [boundaryLoaded, setBoundaryLoaded] = useState(false);
 
   // Filtered reports
   const filteredReports = reports.filter((r) => {
+    if (boundaryLoaded && !provinceBoundaryRef.current) return false;
+    if (
+      boundaryLoaded &&
+      provinceBoundaryRef.current &&
+      !isPointInProvince([r.lng, r.lat], provinceBoundaryRef.current)
+    ) {
+      return false;
+    }
     if (selectedMunicipalityFilter !== 'All' && r.municipality !== selectedMunicipalityFilter) {
       return false;
     }
@@ -50,6 +122,14 @@ export const RiskMap: React.FC = () => {
 
   // Filtered facilities
   const filteredFacilities = facilities.filter((f) => {
+    if (boundaryLoaded && !provinceBoundaryRef.current) return false;
+    if (
+      boundaryLoaded &&
+      provinceBoundaryRef.current &&
+      !isPointInProvince([f.lng, f.lat], provinceBoundaryRef.current)
+    ) {
+      return false;
+    }
     if (selectedMunicipalityFilter !== 'All' && f.municipality !== selectedMunicipalityFilter) {
       return false;
     }
@@ -59,15 +139,19 @@ export const RiskMap: React.FC = () => {
   // Initialize Map
   useEffect(() => {
     if (viewMode !== 'map' || !mapContainerRef.current) return;
+    if (googleMapsKey) return;
 
     if (!mapInstanceRef.current) {
       // Marinduque center coordinates
       const map = L.map(mapContainerRef.current, {
         center: [13.41, 121.90],
-        zoom: 11,
+        zoom: 12,
         minZoom: 10,
-        maxZoom: 17
+        maxZoom: 17,
+        maxBoundsViscosity: 1
       });
+      map.createPane('province-mask');
+      map.getPane('province-mask')!.style.zIndex = '300';
 
       // Standard OpenStreetMap base tiles
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -84,6 +168,60 @@ export const RiskMap: React.FC = () => {
       markersLayerRef.current = markersLayer;
       facilitiesLayerRef.current = facilitiesLayer;
       hazardLayerRef.current = hazardLayer;
+
+      fetch('/geojson/marinduque-province.geojson')
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Boundary request failed with status ${response.status}`);
+          }
+          return response.json() as Promise<ProvinceBoundary>;
+        })
+        .then((boundary) => {
+          provinceBoundaryRef.current = boundary;
+
+          // Use the boundary for bounds and filtering, but do not draw municipal
+          // outlines. The mask hides all map tiles outside Marinduque.
+          const boundaryBounds = L.geoJSON(boundary as Parameters<typeof L.geoJSON>[0]).getBounds();
+          const provinceHoles: L.LatLngExpression[][] = [];
+
+          boundary.features.forEach((feature) => {
+            const polygons =
+              feature.geometry.type === 'Polygon'
+                ? [feature.geometry.coordinates as ProvincePolygon]
+                : (feature.geometry.coordinates as ProvincePolygon[]);
+
+            polygons.forEach(([outerRing]) => {
+              provinceHoles.push(outerRing.map(([longitude, latitude]) => [latitude, longitude]));
+            });
+          });
+
+          L.polygon(
+            [
+              [
+                [-90, -180],
+                [-90, 180],
+                [90, 180],
+                [90, -180]
+              ],
+              ...provinceHoles
+            ],
+            {
+              pane: 'province-mask',
+              stroke: false,
+              fillColor: '#c4bcae',
+              fillOpacity: 1,
+              interactive: false
+            }
+          ).addTo(map);
+
+          map.setMaxBounds(boundaryBounds);
+          map.fitBounds(boundaryBounds, { padding: [8, 8], maxZoom: 12 });
+          setBoundaryLoaded(true);
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to load Marinduque province boundary', error);
+          setBoundaryLoaded(true);
+        });
     }
 
     return () => {
@@ -91,9 +229,178 @@ export const RiskMap: React.FC = () => {
     };
   }, [viewMode]);
 
+  // Google Maps provides satellite imagery, street labels, and 3D tilt when configured.
+  useEffect(() => {
+    if (viewMode !== 'map' || !mapContainerRef.current || !googleMapsKey) return;
+
+    let cancelled = false;
+    loadGoogleMaps(googleMapsKey)
+      .then((maps) => {
+        if (cancelled || googleMapRef.current || !mapContainerRef.current) return;
+
+        const map = new maps.Map(mapContainerRef.current, {
+          center: { lat: 13.41, lng: 121.90 },
+          zoom: 12,
+          minZoom: 10,
+          maxZoom: 19,
+          mapTypeId: 'hybrid',
+          tilt: 45,
+          heading: 0,
+          streetViewControl: false,
+          fullscreenControl: true,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            mapTypeIds: ['roadmap', 'satellite', 'hybrid']
+          }
+        });
+
+        googleMapRef.current = map;
+
+        return fetch('/geojson/marinduque-province.geojson')
+          .then((response) => {
+            if (!response.ok) throw new Error(`Boundary request failed with status ${response.status}`);
+            return response.json() as Promise<ProvinceBoundary>;
+          })
+          .then((boundary) => {
+            if (cancelled) return;
+            provinceBoundaryRef.current = boundary;
+            const boundaryLayer = new maps.Polygon({
+              paths: boundary.features.flatMap((feature) => {
+                const polygons =
+                  feature.geometry.type === 'Polygon'
+                    ? [feature.geometry.coordinates as ProvincePolygon]
+                    : (feature.geometry.coordinates as ProvincePolygon[]);
+                return polygons.map(([outerRing]) =>
+                  outerRing.map(([lng, lat]) => ({ lat, lng }))
+                );
+              }),
+              strokeOpacity: 0,
+              fillOpacity: 0,
+              clickable: false,
+              map
+            });
+            const bounds = new maps.LatLngBounds();
+            boundary.features.forEach((feature) => {
+              const polygons =
+                feature.geometry.type === 'Polygon'
+                  ? [feature.geometry.coordinates as ProvincePolygon]
+                  : (feature.geometry.coordinates as ProvincePolygon[]);
+              polygons.forEach(([outerRing]) =>
+                outerRing.forEach(([lng, lat]) => bounds.extend({ lat, lng }))
+              );
+            });
+            map.fitBounds(bounds, 8);
+            map.setOptions({ restriction: { latLngBounds: bounds, strictBounds: true } });
+            googleOverlaysRef.current.push(boundaryLayer);
+            setBoundaryLoaded(true);
+          });
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load Google Maps', error);
+        setBoundaryLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+      googleOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+      googleOverlaysRef.current = [];
+      googleMapRef.current = null;
+    };
+  }, [viewMode, googleMapsKey]);
+
+  useEffect(() => {
+    if (viewMode !== 'map' || !googleMapsKey || !googleMapRef.current || !boundaryLoaded) return;
+
+    googleOverlaysRef.current
+      .filter((overlay) => overlay instanceof google.maps.Marker || overlay instanceof google.maps.Polygon)
+      .forEach((overlay) => overlay.setMap(null));
+    googleOverlaysRef.current = googleOverlaysRef.current.filter(
+      (overlay) => overlay instanceof google.maps.Polygon && overlay.get('clickable') === false
+    );
+
+    const map = googleMapRef.current;
+    const infoWindow = new google.maps.InfoWindow();
+
+    filteredReports.forEach((report) => {
+      const marker = new google.maps.Marker({
+        position: { lat: report.lat, lng: report.lng },
+        map,
+        title: report.referenceNumber,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          fillColor: report.urgency === 'immediate_danger' || report.urgency === 'urgent' ? '#e05338' : '#16385a',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          scale: 8
+        }
+      });
+      marker.addListener('click', () => {
+        infoWindow.setContent(
+          `<strong>${report.category.replace(/_/g, ' ').toUpperCase()}</strong><br>${report.barangay}, ${report.municipality}<br>${report.description}`
+        );
+        infoWindow.open({ map, anchor: marker });
+        setActiveReportModal(report);
+      });
+      googleOverlaysRef.current.push(marker);
+    });
+
+    if (showFacilities) {
+      filteredFacilities.forEach((facility) => {
+        const marker = new google.maps.Marker({
+          position: { lat: facility.lat, lng: facility.lng },
+          map,
+          title: facility.name,
+          icon: {
+            path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+            fillColor: '#0284c7',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+            scale: 6
+          }
+        });
+        marker.addListener('click', () => {
+          infoWindow.setContent(`<strong>${facility.name}</strong><br>${facility.barangay}, ${facility.municipality}`);
+          infoWindow.open({ map, anchor: marker });
+        });
+        googleOverlaysRef.current.push(marker);
+      });
+    }
+
+    if (showHazardReference) {
+      const floodPolygon = new google.maps.Polygon({
+        paths: [
+          { lat: 13.465, lng: 121.848 },
+          { lat: 13.452, lng: 121.844 },
+          { lat: 13.442, lng: 121.838 },
+          { lat: 13.435, lng: 121.821 },
+          { lat: 13.438, lng: 121.815 },
+          { lat: 13.448, lng: 121.832 },
+          { lat: 13.468, lng: 121.842 }
+        ],
+        strokeColor: '#0284c7',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: '#0284c7',
+        fillOpacity: 0.18,
+        map
+      });
+      googleOverlaysRef.current.push(floodPolygon);
+    }
+  }, [
+    viewMode,
+    googleMapsKey,
+    boundaryLoaded,
+    filteredReports,
+    filteredFacilities,
+    showFacilities,
+    showHazardReference
+  ]);
+
   // Update Map Markers when data or filters change
   useEffect(() => {
-    if (viewMode !== 'map' || !mapInstanceRef.current) return;
+    if (viewMode !== 'map' || googleMapsKey || !mapInstanceRef.current) return;
 
     // 1. Reports Markers
     if (markersLayerRef.current) {
@@ -263,7 +570,7 @@ export const RiskMap: React.FC = () => {
         hazardLayerRef.current.addLayer(surgePoly);
       }
     }
-  }, [viewMode, filteredReports, filteredFacilities, showFacilities, showHazardReference]);
+  }, [viewMode, filteredReports, filteredFacilities, showFacilities, showHazardReference, boundaryLoaded]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
@@ -388,6 +695,19 @@ export const RiskMap: React.FC = () => {
       {viewMode === 'map' ? (
         <div className="relative bg-sand-200 rounded-xl overflow-hidden shadow-md border border-sand-300 h-[560px]">
           <div id="pulso-map" ref={mapContainerRef} className="w-full h-full z-10" />
+          {googleMapsKey && (
+            <div className="absolute top-3 right-3 z-20 rounded-md bg-marine-950/90 px-3 py-1.5 text-[11px] font-semibold text-white shadow">
+              Google Maps Hybrid 3D
+            </div>
+          )}
+          {!googleMapsKey && (
+            <div className="absolute top-3 right-3 z-20 max-w-[260px] rounded-md bg-amber-50/95 px-3 py-2 text-[11px] text-amber-900 shadow ring-1 ring-amber-200">
+              <strong>Google Maps is not configured.</strong>
+              <span className="block mt-0.5">
+                Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to <code>.env.local</code>, then restart the app.
+              </span>
+            </div>
+          )}
 
           {/* Map Legend Floating Box */}
           <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-sm border border-sand-300 rounded-lg p-3 text-[11px] shadow-lg max-w-xs">

@@ -102,12 +102,12 @@ export const Header: React.FC = () => {
             {isOffline ? (
               <>
                 <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                <span>Offline Mode {isSimulatedOffline ? '(Simulated)' : ''}</span>
+                <span>Offline{isSimulatedOffline ? ' (Demo)' : ''}</span>
               </>
             ) : (
               <>
                 <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Online (Connected)</span>
+                <span>Online</span>
               </>
             )}
           </button>
@@ -126,7 +126,7 @@ export const Header: React.FC = () => {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>
-                {outboxCount} Queued {outboxCount === 1 ? 'Report' : 'Reports'}
+                {outboxCount} Waiting
               </span>
             </button>
           )}
@@ -177,7 +177,7 @@ export const Header: React.FC = () => {
             id="report"
             active={activeTab === 'report'}
             onClick={() => setActiveTab('report')}
-            label="Report Incident"
+            label="Report"
             highlight={true}
             icon={<Send className="w-4 h-4" />}
           />
@@ -185,49 +185,49 @@ export const Header: React.FC = () => {
             id="map"
             active={activeTab === 'map'}
             onClick={() => setActiveTab('map')}
-            label="Community Map"
+            label="Map"
             icon={<Layers className="w-4 h-4" />}
           />
           <NavTab
             id="verify"
             active={activeTab === 'verify'}
             onClick={() => setActiveTab('verify')}
-            label="Verification Hub"
+            label="Review"
             icon={<FileCheck2 className="w-4 h-4" />}
           />
           <NavTab
             id="facilities"
             active={activeTab === 'facilities'}
             onClick={() => setActiveTab('facilities')}
-            label="Facilities & Evacuation"
+            label="Safe Places"
             icon={<Building className="w-4 h-4" />}
           />
           <NavTab
             id="advisories"
             active={activeTab === 'advisories'}
             onClick={() => setActiveTab('advisories')}
-            label="Official Advisories"
+            label="Advisories"
             icon={<Radio className="w-4 h-4" />}
           />
           <NavTab
             id="livelihood"
             active={activeTab === 'livelihood'}
             onClick={() => setActiveTab('livelihood')}
-            label="Agri & Fisheries"
+            label="Livelihood"
             icon={<Sprout className="w-4 h-4" />}
           />
           <NavTab
             id="sitrep"
             active={activeTab === 'sitrep'}
             onClick={() => setActiveTab('sitrep')}
-            label="SitRep Generator"
+            label="Situation Report"
             icon={<FileText className="w-4 h-4" />}
           />
           <NavTab
             id="audit"
             active={activeTab === 'audit'}
             onClick={() => setActiveTab('audit')}
-            label="Audit Trail"
+            label="Activity"
             icon={<History className="w-4 h-4" />}
           />
         </div>

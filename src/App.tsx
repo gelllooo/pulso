@@ -13,7 +13,7 @@ import { SitRepGenerator } from './components/SitRepGenerator';
 import { AuditTrailView } from './components/AuditTrailView';
 
 const AppContent: React.FC = () => {
-  const { activeTab, crisisMode } = useApp();
+  const { activeTab, crisisMode, isLoading, loadError } = useApp();
 
   return (
     <div className={`min-h-screen flex flex-col ${crisisMode ? 'bg-amber-50/40' : 'bg-sand-50'}`}>
@@ -21,15 +21,28 @@ const AppContent: React.FC = () => {
       <OfflineStatusBar />
 
       <main className="flex-1">
-        {activeTab === 'overview' && <Overview />}
-        {activeTab === 'report' && <ReportForm />}
-        {activeTab === 'map' && <EnhancedRiskMap />}
-        {activeTab === 'verify' && <VerificationDashboard />}
-        {activeTab === 'facilities' && <FacilityDirectory />}
-        {activeTab === 'advisories' && <AdvisoryBoard />}
-        {activeTab === 'livelihood' && <LivelihoodModule />}
-        {activeTab === 'sitrep' && <SitRepGenerator />}
-        {activeTab === 'audit' && <AuditTrailView />}
+        {isLoading ? (
+          <div className="max-w-3xl mx-auto px-4 py-16 text-center text-sm text-charcoal-600">
+            Loading saved data…
+          </div>
+        ) : loadError ? (
+          <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+            <p className="text-sm text-coral-700">{loadError}</p>
+            <p className="text-xs text-charcoal-500 mt-1">Refresh the page and try again.</p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'overview' && <Overview />}
+            {activeTab === 'report' && <ReportForm />}
+            {activeTab === 'map' && <EnhancedRiskMap />}
+            {activeTab === 'verify' && <VerificationDashboard />}
+            {activeTab === 'facilities' && <FacilityDirectory />}
+            {activeTab === 'advisories' && <AdvisoryBoard />}
+            {activeTab === 'livelihood' && <LivelihoodModule />}
+            {activeTab === 'sitrep' && <SitRepGenerator />}
+            {activeTab === 'audit' && <AuditTrailView />}
+          </>
+        )}
       </main>
 
       <footer className="print:hidden bg-marine-950 text-sand-300 border-t border-marine-800 py-6 text-xs mt-12">
@@ -37,9 +50,9 @@ const AppContent: React.FC = () => {
           <div className="flex items-center space-x-3">
             <img src="/logo.svg" alt="PULSO Logo" className="w-6 h-6" />
             <div>
-              <span className="font-bold text-white tracking-wider">PULSO</span> &mdash; Disaster Preparedness, Resilience, and Livelihood Intelligence System
+              <span className="font-bold text-white tracking-wider">PULSO</span> &mdash; Marinduque emergency reporting
               <div className="text-[11px] text-charcoal-400">
-                Designed for the Island Province of Marinduque (MIMAROPA Region) &bull; Offline-First Progressive Web App
+                Works offline and sends reports when connected
               </div>
             </div>
           </div>

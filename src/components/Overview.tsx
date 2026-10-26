@@ -50,34 +50,22 @@ export const Overview: React.FC = () => {
         <div className="relative z-10 max-w-3xl">
           <div className="flex items-center space-x-2 text-coral-400 font-bold text-xs uppercase tracking-wider mb-2">
             <span className="w-2 h-2 rounded-full bg-coral-400 animate-ping"></span>
-            <span>Marinduque Community Resilience Platform</span>
+            <span>Marinduque emergency reporting</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white tracking-tight">
             PULSO Marinduque
           </h1>
           <p className="text-xs sm:text-sm text-sand-200 mt-2 leading-relaxed">
-            An offline-first, community-centered disaster preparedness, resilience, and livelihood intelligence system. Empowering trained barangay reporters, farmers, fisherfolk, and DRRMO teams to coordinate verified action before, during, and after disasters.
+            Report hazards, check advisories, and coordinate response.
           </p>
 
           {/* Workflow Sequence Indicator */}
           <div className="mt-5 pt-4 border-t border-marine-700/80 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-sand-200">
-            <span className="text-sand-300 font-normal">Core Operational Workflow:</span>
-            <span className="bg-marine-700/70 px-2 py-0.5 rounded text-white">Observe</span>
-            <span>&rarr;</span>
+            <span className="text-sand-300 font-normal">How it works:</span>
             <span className="bg-marine-700/70 px-2 py-0.5 rounded text-white">Report</span>
             <span>&rarr;</span>
-            <span className="bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40">
-              Store Offline
-            </span>
-            <span>&rarr;</span>
-            <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40">
-              Synchronize
-            </span>
-            <span>&rarr;</span>
             <span className="bg-marine-700/70 px-2 py-0.5 rounded text-white">Verify</span>
-            <span>&rarr;</span>
-            <span className="bg-marine-700/70 px-2 py-0.5 rounded text-white">Visualize</span>
             <span>&rarr;</span>
             <span className="bg-coral-500/40 text-coral-200 px-2 py-0.5 rounded border border-coral-500/40">
               Respond
@@ -129,21 +117,21 @@ export const Overview: React.FC = () => {
           </div>
           <div className="text-xs">
             <div className="text-[11px] font-bold uppercase tracking-wider text-charcoal-500">
-              Offline-First Engine
+              Connection
             </div>
             <div className="font-bold text-marine-900 text-sm mt-0.5">
-              {isOffline ? 'Offline Mode Active' : 'Online & Synchronized'}
+              {isOffline ? 'Offline' : 'Online'}
             </div>
             <p className="text-charcoal-600 text-[11px] mt-1 leading-snug">
               {isOffline
-                ? `${outboxCount} report(s) waiting in device IndexedDB outbox. Automatic background sync enabled.`
-                : 'Connected to central data store. All local reports are up-to-date.'}
+                ? `${outboxCount} report(s) waiting to send.`
+                : 'Reports are saved while you work.'}
             </p>
             <button
               onClick={() => setActiveTab('report')}
               className="mt-2 text-coral-600 font-bold underline flex items-center space-x-1"
             >
-              <span>Submit New Report</span>
+              <span>Report an incident</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>

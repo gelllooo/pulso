@@ -11,6 +11,17 @@ export type UserRole =
   | 'admin'
   | 'auditor';
 
+export type AppTab =
+  | 'overview'
+  | 'report'
+  | 'map'
+  | 'verify'
+  | 'facilities'
+  | 'advisories'
+  | 'livelihood'
+  | 'sitrep'
+  | 'audit';
+
 export interface UserProfile {
   id: string;
   name: string;

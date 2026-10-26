@@ -10,7 +10,8 @@ import {
   Municipality,
   VerificationData,
   AssignmentData,
-  ReportStatus
+  ReportStatus,
+  AppTab
 } from '../types';
 import { db, initializeDatabase } from '../db';
 
@@ -23,6 +24,8 @@ interface AppContextType {
   isOffline: boolean;
   outboxCount: number;
   isSyncing: boolean;
+  isLoading: boolean;
+  loadError: string | null;
   syncNow: () => Promise<void>;
   reports: IncidentReport[];
   facilities: Facility[];
@@ -30,8 +33,8 @@ interface AppContextType {
   auditEvents: AuditEvent[];
   crisisMode: boolean;
   setCrisisMode: (val: boolean) => void;
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   selectedMunicipalityFilter: Municipality | 'All';
   setSelectedMunicipalityFilter: (m: Municipality | 'All') => void;
   submitReport: (reportData: Omit<IncidentReport, 'id' | 'clientReportId' | 'referenceNumber' | 'status' | 'idempotencyKey' | 'lastUpdatedAt'>) => Promise<string>;
@@ -44,12 +47,11 @@ interface AppContextType {
 
 const DEFAULT_USER: UserProfile = {
   id: 'USR-001',
-  name: 'Maria Elena Reyes',
+  name: 'Demo User',
   role: 'barangay_official',
   scopeMunicipality: 'Boac',
   scopeBarangay: 'Cawit',
-  contactNumber: '0917-888-2345',
-  agencyOrOffice: 'BDRRMC Cawit'
+  agencyOrOffice: 'Demo workspace'
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,12 +62,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isNetworkOnline, setIsNetworkOnline] = useState(navigator.onLine);
   const [outboxCount, setOutboxCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [reports, setReports] = useState<IncidentReport[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [advisories, setAdvisories] = useState<OfficialAdvisory[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [crisisMode, setCrisisMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<AppTab>('overview');
   const [selectedMunicipalityFilter, setSelectedMunicipalityFilter] = useState<Municipality | 'All'>('All');
   const [activeToast, setActiveToast] = useState<string | null>(null);
 
@@ -105,11 +109,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setOutboxCount(pendingCount);
     } catch (err) {
       console.error('Failed to load from Dexie DB', err);
+      setLoadError('Saved data could not be loaded. Try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    initializeDatabase().then(() => refreshData());
+    initializeDatabase()
+      .then(refreshData)
+      .catch((err) => {
+        console.error('Failed to initialize Dexie DB', err);
+        setLoadError('Saved data could not be loaded. Try again.');
+        setIsLoading(false);
+      });
   }, []);
 
   // Automatic sync when connection returns
@@ -123,8 +136,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsSimulatedOffline((prev) => !prev);
     setActiveToast(
       !isSimulatedOffline
-        ? 'Offline Mode Active — Reports will queue in local IndexedDB outbox'
-        : 'Online Mode Restored — Ready to sync queued reports'
+        ? 'Offline mode on. Reports will wait on this device.'
+        : 'Online mode restored. Waiting reports can be sent.'
     );
   };
 
@@ -154,56 +167,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveToast('Cannot sync while offline. Please connect to network.');
       return;
     }
-    const pendingItems = await db.outbox.toArray();
-    if (pendingItems.length === 0) {
-      setActiveToast('All reports are already synchronized.');
-      return;
-    }
-
     setIsSyncing(true);
-    setActiveToast(`Synchronizing ${pendingItems.length} queued report(s)...`);
+    try {
+      const pendingItems = await db.outbox.toArray();
+      if (pendingItems.length === 0) {
+        setActiveToast('Nothing is waiting to send.');
+        return;
+      }
 
-    // Simulate network transmission delay with idempotency protection
-    await new Promise((resolve) => setTimeout(resolve, 800));
+      setActiveToast(`Sending ${pendingItems.length} report(s)...`);
 
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-    for (const item of pendingItems) {
-      const updatedReport: IncidentReport = {
-        ...item,
-        status: item.status === 'queued_offline' ? 'received' : item.status,
-        syncedAt: nowStr,
-        lastUpdatedAt: nowStr
-      };
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
-      await db.reports.put(updatedReport);
-      await db.outbox.delete(item.id);
+      for (const item of pendingItems) {
+        const updatedReport: IncidentReport = {
+          ...item,
+          status: item.status === 'queued_offline' ? 'received' : item.status,
+          syncedAt: nowStr,
+          lastUpdatedAt: nowStr
+        };
 
-      await db.auditEvents.add({
-        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
-        reportId: item.id,
-        actor: currentUser.name,
-        actorRole: currentUser.role,
-        action: 'Offline Sync Completed',
-        previousStatus: 'queued_offline',
-        newStatus: 'received',
-        timestamp: nowStr,
-        notes: `Synchronized from device IndexedDB (Idempotency Key: ${item.idempotencyKey})`
-      });
+        await db.reports.put(updatedReport);
+        await db.outbox.delete(item.id);
 
-      await db.syncLogs.add({
-        id: 'LOG-' + Math.random().toString(36).substring(2, 9),
-        clientReportId: item.clientReportId,
-        attemptNumber: 1,
-        status: 'success',
-        timestamp: nowStr,
-        message: `Synced report ${item.referenceNumber} successfully`
-      });
+        await db.auditEvents.add({
+          id: `AUD-${crypto.randomUUID()}`,
+          reportId: item.id,
+          actor: currentUser.name,
+          actorRole: currentUser.role,
+          action: 'Report Sent',
+          previousStatus: 'queued_offline',
+          newStatus: 'received',
+          timestamp: nowStr,
+          notes: 'Sent from this device.'
+        });
+
+        await db.syncLogs.add({
+          id: `LOG-${crypto.randomUUID()}`,
+          clientReportId: item.clientReportId,
+          attemptNumber: 1,
+          status: 'success',
+          timestamp: nowStr,
+          message: `Sent report ${item.referenceNumber}`
+        });
+      }
+
+      await refreshData();
+      setActiveToast(`${pendingItems.length} report(s) sent.`);
+    } catch (err) {
+      console.error('Failed to send queued reports', err);
+      setActiveToast('Some reports could not be sent. Try again.');
+    } finally {
+      setIsSyncing(false);
     }
-
-    await refreshData();
-    setIsSyncing(false);
-    setActiveToast(`Successfully synced ${pendingItems.length} report(s) to central dashboard!`);
   };
 
   // Submit Report
@@ -213,8 +231,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const randomHex = Math.floor(100 + Math.random() * 900);
     const refNum = `PULSO-2026-${data.municipality.toUpperCase()}-${randomHex}`;
     const id = 'REP-' + Date.now().toString(36) + '-' + randomHex;
-    const clientReportId = 'client-uuid-' + Math.random().toString(36).substring(2, 10);
-    const idempotencyKey = 'idem-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const clientReportId = `client-${crypto.randomUUID()}`;
+    const idempotencyKey = `idem-${crypto.randomUUID()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
     const initialStatus: ReportStatus = isOffline ? 'queued_offline' : 'received';
@@ -234,7 +252,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await db.outbox.add(newReport);
       await db.reports.add(newReport);
       await db.auditEvents.add({
-        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
+        id: `AUD-${crypto.randomUUID()}`,
         reportId: id,
         actor: data.reporterName || 'Anonymous Reporter',
         actorRole: data.reporterRole,
@@ -242,13 +260,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         previousStatus: 'draft',
         newStatus: 'queued_offline',
         timestamp: nowStr,
-        notes: `Saved locally on device (IndexedDB). Awaiting network sync.`
+        notes: 'Saved on this device. Waiting for a connection.'
       });
       setActiveToast(`Report ${refNum} saved locally! It will automatically sync when connected.`);
     } else {
       await db.reports.add(newReport);
       await db.auditEvents.add({
-        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
+        id: `AUD-${crypto.randomUUID()}`,
         reportId: id,
         actor: data.reporterName || 'Anonymous Reporter',
         actorRole: data.reporterRole,
@@ -256,7 +274,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         previousStatus: 'draft',
         newStatus: 'received',
         timestamp: nowStr,
-        notes: `Direct upload to central database. Reference: ${refNum}`
+        notes: `Saved while connected. Reference: ${refNum}`
       });
       setActiveToast(`Report ${refNum} submitted and received by central system!`);
     }
@@ -282,7 +300,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
+      id: `AUD-${crypto.randomUUID()}`,
       reportId,
       actor: verData.verifierName,
       actorRole: verData.verifierRole,
@@ -312,7 +330,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
+      id: `AUD-${crypto.randomUUID()}`,
       reportId,
       actor: currentUser.name,
       actorRole: currentUser.role,
@@ -341,7 +359,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
+      id: `AUD-${crypto.randomUUID()}`,
       reportId,
       actor: currentUser.name,
       actorRole: currentUser.role,
@@ -367,6 +385,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isOffline,
         outboxCount,
         isSyncing,
+        isLoading,
+        loadError,
         syncNow,
         reports,
         facilities,
