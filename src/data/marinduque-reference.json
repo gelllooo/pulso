@@ -1,0 +1,1143 @@
+{
+  "source": "@aivangogh/ph-address 2026.2.4; PSGC as of 30 June 2026",
+  "sourceUrl": "https://psa.gov.ph/classification/psgc/",
+  "province": {
+    "name": "Marinduque",
+    "psgcCode": "1704000000",
+    "regionCode": "1700000000"
+  },
+  "municipalities": [
+    {
+      "name": "Boac",
+      "psgcCode": "1704001000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Agot",
+          "psgcCode": "1704001001",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Agumaymayan",
+          "psgcCode": "1704001002",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Amoingon",
+          "psgcCode": "1704001003",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Apitong",
+          "psgcCode": "1704001004",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Balagasan",
+          "psgcCode": "1704001005",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Balaring",
+          "psgcCode": "1704001006",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Balimbing",
+          "psgcCode": "1704001007",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Balogo",
+          "psgcCode": "1704001008",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bamban",
+          "psgcCode": "1704001010",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bangbangalon",
+          "psgcCode": "1704001009",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bantad",
+          "psgcCode": "1704001011",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bantay",
+          "psgcCode": "1704001012",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bayuti",
+          "psgcCode": "1704001013",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Binunga",
+          "psgcCode": "1704001014",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Boi",
+          "psgcCode": "1704001015",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Boton",
+          "psgcCode": "1704001016",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Buliasnin",
+          "psgcCode": "1704001017",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Bunganay",
+          "psgcCode": "1704001018",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Caganhao",
+          "psgcCode": "1704001020",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Canat",
+          "psgcCode": "1704001021",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Catubugan",
+          "psgcCode": "1704001022",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Cawit",
+          "psgcCode": "1704001023",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Daig",
+          "psgcCode": "1704001024",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Daypay",
+          "psgcCode": "1704001025",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Duyay",
+          "psgcCode": "1704001026",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Hinapulan",
+          "psgcCode": "1704001029",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Ihatub",
+          "psgcCode": "1704001027",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Isok I",
+          "psgcCode": "1704001061",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Isok II Pob.",
+          "psgcCode": "1704001028",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Laylay",
+          "psgcCode": "1704001030",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Lupac",
+          "psgcCode": "1704001031",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Mahinhin",
+          "psgcCode": "1704001032",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Mainit",
+          "psgcCode": "1704001033",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Malbog",
+          "psgcCode": "1704001034",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Maligaya",
+          "psgcCode": "1704001019",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Malusak",
+          "psgcCode": "1704001035",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Mansiwat",
+          "psgcCode": "1704001036",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Mataas Na Bayan",
+          "psgcCode": "1704001037",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Maybo",
+          "psgcCode": "1704001038",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Mercado",
+          "psgcCode": "1704001039",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Murallon",
+          "psgcCode": "1704001040",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Ogbac",
+          "psgcCode": "1704001041",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Pawa",
+          "psgcCode": "1704001042",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Pili",
+          "psgcCode": "1704001043",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Poctoy",
+          "psgcCode": "1704001044",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Poras",
+          "psgcCode": "1704001045",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Puting Buhangin",
+          "psgcCode": "1704001046",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Puyog",
+          "psgcCode": "1704001047",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Sabong",
+          "psgcCode": "1704001048",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "San Miguel",
+          "psgcCode": "1704001049",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Santol",
+          "psgcCode": "1704001050",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Sawi",
+          "psgcCode": "1704001051",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tabi",
+          "psgcCode": "1704001052",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tabigue",
+          "psgcCode": "1704001053",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tagwak",
+          "psgcCode": "1704001054",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tambunan",
+          "psgcCode": "1704001055",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tampus",
+          "psgcCode": "1704001056",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tanza",
+          "psgcCode": "1704001057",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tugos",
+          "psgcCode": "1704001058",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tumagabok",
+          "psgcCode": "1704001059",
+          "municipalCityCode": "1704001000"
+        },
+        {
+          "name": "Tumapon",
+          "psgcCode": "1704001060",
+          "municipalCityCode": "1704001000"
+        }
+      ]
+    },
+    {
+      "name": "Buenavista",
+      "psgcCode": "1704002000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Bagacay",
+          "psgcCode": "1704002001",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Bagtingon",
+          "psgcCode": "1704002002",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Barangay I",
+          "psgcCode": "1704002015",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Barangay II",
+          "psgcCode": "1704002016",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Barangay III",
+          "psgcCode": "1704002017",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Barangay IV",
+          "psgcCode": "1704002018",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Bicas-bicas",
+          "psgcCode": "1704002003",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Caigangan",
+          "psgcCode": "1704002004",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Daykitin",
+          "psgcCode": "1704002005",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Libas",
+          "psgcCode": "1704002006",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Malbog",
+          "psgcCode": "1704002007",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Sihi",
+          "psgcCode": "1704002011",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Timbo",
+          "psgcCode": "1704002012",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Tungib-Lipata",
+          "psgcCode": "1704002013",
+          "municipalCityCode": "1704002000"
+        },
+        {
+          "name": "Yook",
+          "psgcCode": "1704002014",
+          "municipalCityCode": "1704002000"
+        }
+      ]
+    },
+    {
+      "name": "Gasan",
+      "psgcCode": "1704003000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Antipolo",
+          "psgcCode": "1704003001",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bachao Ibaba",
+          "psgcCode": "1704003003",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bachao Ilaya",
+          "psgcCode": "1704003004",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bacongbacong",
+          "psgcCode": "1704003005",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bahi",
+          "psgcCode": "1704003006",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bangbang",
+          "psgcCode": "1704003007",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Banot",
+          "psgcCode": "1704003008",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Banuyo",
+          "psgcCode": "1704003009",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Barangay I",
+          "psgcCode": "1704003024",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Barangay II",
+          "psgcCode": "1704003025",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Barangay III",
+          "psgcCode": "1704003026",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Bognuyan",
+          "psgcCode": "1704003010",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Cabugao",
+          "psgcCode": "1704003011",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Dawis",
+          "psgcCode": "1704003012",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Dili",
+          "psgcCode": "1704003013",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Libtangin",
+          "psgcCode": "1704003014",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Mahunig",
+          "psgcCode": "1704003015",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Mangiliol",
+          "psgcCode": "1704003016",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Masiga",
+          "psgcCode": "1704003017",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Matandang Gasan",
+          "psgcCode": "1704003018",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Pangi",
+          "psgcCode": "1704003019",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Pinggan",
+          "psgcCode": "1704003020",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Tabionan",
+          "psgcCode": "1704003021",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Tapuyan",
+          "psgcCode": "1704003022",
+          "municipalCityCode": "1704003000"
+        },
+        {
+          "name": "Tiguion",
+          "psgcCode": "1704003023",
+          "municipalCityCode": "1704003000"
+        }
+      ]
+    },
+    {
+      "name": "Mogpog",
+      "psgcCode": "1704004000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Anapog-Sibucao",
+          "psgcCode": "1704004001",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Argao",
+          "psgcCode": "1704004002",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Balanacan",
+          "psgcCode": "1704004003",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Banto",
+          "psgcCode": "1704004004",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Bintakay",
+          "psgcCode": "1704004005",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Bocboc",
+          "psgcCode": "1704004006",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Butansapa",
+          "psgcCode": "1704004007",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Candahon",
+          "psgcCode": "1704004008",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Capayang",
+          "psgcCode": "1704004009",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Danao",
+          "psgcCode": "1704004010",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Dulong Bayan",
+          "psgcCode": "1704004011",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Gitnang Bayan",
+          "psgcCode": "1704004012",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Guisian",
+          "psgcCode": "1704004013",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Hinadharan",
+          "psgcCode": "1704004014",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Hinanggayon",
+          "psgcCode": "1704004015",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Ino",
+          "psgcCode": "1704004016",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Janagdong",
+          "psgcCode": "1704004017",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Lamesa",
+          "psgcCode": "1704004018",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Laon",
+          "psgcCode": "1704004019",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Magapua",
+          "psgcCode": "1704004020",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Malayak",
+          "psgcCode": "1704004021",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Malusak",
+          "psgcCode": "1704004022",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Mampaitan",
+          "psgcCode": "1704004023",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Mangyan-Mababad",
+          "psgcCode": "1704004024",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Market Site",
+          "psgcCode": "1704004025",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Mataas Na Bayan",
+          "psgcCode": "1704004026",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Mendez",
+          "psgcCode": "1704004027",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Nangka I",
+          "psgcCode": "1704004028",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Nangka II",
+          "psgcCode": "1704004029",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Paye",
+          "psgcCode": "1704004030",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Pili",
+          "psgcCode": "1704004032",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Puting Buhangin",
+          "psgcCode": "1704004033",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Sayao",
+          "psgcCode": "1704004034",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Silangan",
+          "psgcCode": "1704004035",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Sumangga",
+          "psgcCode": "1704004036",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Tarug",
+          "psgcCode": "1704004037",
+          "municipalCityCode": "1704004000"
+        },
+        {
+          "name": "Villa Mendez",
+          "psgcCode": "1704004038",
+          "municipalCityCode": "1704004000"
+        }
+      ]
+    },
+    {
+      "name": "Santa Cruz",
+      "psgcCode": "1704005000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Alobo",
+          "psgcCode": "1704005001",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Angas",
+          "psgcCode": "1704005002",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Aturan",
+          "psgcCode": "1704005003",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Bagong Silang Pob.",
+          "psgcCode": "1704005004",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Baguidbirin",
+          "psgcCode": "1704005005",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Baliis",
+          "psgcCode": "1704005006",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Balogo",
+          "psgcCode": "1704005007",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Banahaw Pob.",
+          "psgcCode": "1704005008",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Bangcuangan",
+          "psgcCode": "1704005009",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Banogbog",
+          "psgcCode": "1704005010",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Biga",
+          "psgcCode": "1704005011",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Botilao",
+          "psgcCode": "1704005012",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Buyabod",
+          "psgcCode": "1704005013",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Dating Bayan",
+          "psgcCode": "1704005014",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Devilla",
+          "psgcCode": "1704005015",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Dolores",
+          "psgcCode": "1704005016",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Haguimit",
+          "psgcCode": "1704005017",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Hupi",
+          "psgcCode": "1704005018",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Ipil",
+          "psgcCode": "1704005019",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Jolo",
+          "psgcCode": "1704005020",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kaganhao",
+          "psgcCode": "1704005021",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kalangkang",
+          "psgcCode": "1704005022",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kamandugan",
+          "psgcCode": "1704005023",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kasily",
+          "psgcCode": "1704005024",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kilo-kilo",
+          "psgcCode": "1704005025",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Kinyaman",
+          "psgcCode": "1704005026",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Labo",
+          "psgcCode": "1704005027",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Lamesa",
+          "psgcCode": "1704005028",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Landy",
+          "psgcCode": "1704005029",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Lapu-lapu Pob.",
+          "psgcCode": "1704005030",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Libjo",
+          "psgcCode": "1704005031",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Lipa",
+          "psgcCode": "1704005032",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Lusok",
+          "psgcCode": "1704005033",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Maharlika Pob.",
+          "psgcCode": "1704005034",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Makulapnit",
+          "psgcCode": "1704005035",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Maniwaya",
+          "psgcCode": "1704005036",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Manlibunan",
+          "psgcCode": "1704005037",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Masaguisi",
+          "psgcCode": "1704005038",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Masalukot",
+          "psgcCode": "1704005039",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Matalaba",
+          "psgcCode": "1704005040",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Mongpong",
+          "psgcCode": "1704005041",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Morales",
+          "psgcCode": "1704005042",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Napo",
+          "psgcCode": "1704005043",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Pag-Asa Pob.",
+          "psgcCode": "1704005044",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Pantayin",
+          "psgcCode": "1704005045",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Polo",
+          "psgcCode": "1704005047",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Pulong-Parang",
+          "psgcCode": "1704005048",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Punong",
+          "psgcCode": "1704005049",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "San Antonio",
+          "psgcCode": "1704005050",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "San Isidro",
+          "psgcCode": "1704005051",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Tagum",
+          "psgcCode": "1704005052",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Tamayo",
+          "psgcCode": "1704005053",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Tambangan",
+          "psgcCode": "1704005054",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Tawiran",
+          "psgcCode": "1704005055",
+          "municipalCityCode": "1704005000"
+        },
+        {
+          "name": "Taytay",
+          "psgcCode": "1704005056",
+          "municipalCityCode": "1704005000"
+        }
+      ]
+    },
+    {
+      "name": "Torrijos",
+      "psgcCode": "1704006000",
+      "provinceCode": "1704000000",
+      "barangays": [
+        {
+          "name": "Bangwayin",
+          "psgcCode": "1704006001",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Bayakbakin",
+          "psgcCode": "1704006002",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Bolo",
+          "psgcCode": "1704006003",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Bonliw",
+          "psgcCode": "1704006004",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Buangan",
+          "psgcCode": "1704006005",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Cabuyo",
+          "psgcCode": "1704006006",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Cagpo",
+          "psgcCode": "1704006007",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Dampulan",
+          "psgcCode": "1704006008",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Kay Duke",
+          "psgcCode": "1704006009",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Mabuhay",
+          "psgcCode": "1704006010",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Makawayan",
+          "psgcCode": "1704006011",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Malibago",
+          "psgcCode": "1704006012",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Malinao",
+          "psgcCode": "1704006013",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Maranlig",
+          "psgcCode": "1704006014",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Marlangga",
+          "psgcCode": "1704006015",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Matuyatuya",
+          "psgcCode": "1704006016",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Nangka",
+          "psgcCode": "1704006017",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Pakaskasan",
+          "psgcCode": "1704006018",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Payanas",
+          "psgcCode": "1704006019",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Poblacion",
+          "psgcCode": "1704006020",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Poctoy",
+          "psgcCode": "1704006021",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Sibuyao",
+          "psgcCode": "1704006022",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Suha",
+          "psgcCode": "1704006023",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Talawan",
+          "psgcCode": "1704006024",
+          "municipalCityCode": "1704006000"
+        },
+        {
+          "name": "Tigwi",
+          "psgcCode": "1704006025",
+          "municipalCityCode": "1704006000"
+        }
+      ]
+    }
+  ]
+}

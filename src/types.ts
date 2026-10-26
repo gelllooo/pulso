@@ -1,26 +1,23 @@
 // PULSO Data Models and Enums for Marinduque
 
 export type UserRole =
-  | 'guest'
-  | 'community_reporter'
-  | 'barangay_official'
-  | 'municipal_official'
-  | 'provincial_official'
-  | 'agriculture_officer'
-  | 'fisheries_officer'
-  | 'admin'
-  | 'auditor';
+  | "resident_guest"
+  | "municipal_officer"
+  | "provincial_officer"
+  | "administrator";
 
 export type AppTab =
-  | 'overview'
-  | 'report'
-  | 'map'
-  | 'verify'
-  | 'facilities'
-  | 'advisories'
-  | 'livelihood'
-  | 'sitrep'
-  | 'audit';
+  | "overview"
+  | "report"
+  | "map"
+  | "verify"
+  | "facilities"
+  | "advisories"
+  | "livelihood"
+  | "sitrep"
+  | "audit"
+  | "preparedness"
+  | "dashboard";
 
 export interface UserProfile {
   id: string;
@@ -33,35 +30,30 @@ export interface UserProfile {
 }
 
 export type Municipality =
-  | 'Boac'
-  | 'Mogpog'
-  | 'Gasan'
-  | 'Santa Cruz'
-  | 'Torrijos'
-  | 'Buenavista';
+  "Boac" | "Mogpog" | "Gasan" | "Santa Cruz" | "Torrijos" | "Buenavista";
 
 export interface BarangayInfo {
   name: string;
   municipality: Municipality;
   psgcCode: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
 }
 
 export type ReportCategory =
-  | 'flooding'
-  | 'blocked_road'
-  | 'landslide'
-  | 'fire'
-  | 'damaged_structure'
-  | 'power_outage'
-  | 'telecom_outage'
-  | 'water_sanitation'
-  | 'medical_welfare'
-  | 'missing_stranded'
-  | 'agriculture_damage'
-  | 'fisheries_damage'
-  | 'other_concern';
+  | "flooding"
+  | "blocked_road"
+  | "landslide"
+  | "fire"
+  | "damaged_structure"
+  | "power_outage"
+  | "telecom_outage"
+  | "water_sanitation"
+  | "medical_welfare"
+  | "missing_stranded"
+  | "agriculture_damage"
+  | "fisheries_damage"
+  | "other_concern";
 
 export interface CategoryMetadata {
   id: ReportCategory;
@@ -73,28 +65,29 @@ export interface CategoryMetadata {
   iconName: string;
 }
 
-export type UrgencyLevel = 'routine' | 'elevated' | 'urgent' | 'immediate_danger';
+export type UrgencyLevel =
+  "routine" | "elevated" | "urgent" | "immediate_danger";
 
 export type ReportStatus =
-  | 'draft'
-  | 'pending_sync'
-  | 'queued_offline'
-  | 'received'
-  | 'under_verification'
-  | 'verified'
-  | 'assigned'
-  | 'action_in_progress'
-  | 'resolved'
-  | 'closed'
-  | 'rejected'
-  | 'duplicate';
+  | "draft"
+  | "pending_sync"
+  | "queued_offline"
+  | "received"
+  | "under_verification"
+  | "verified"
+  | "assigned"
+  | "action_in_progress"
+  | "resolved"
+  | "closed"
+  | "rejected"
+  | "duplicate";
 
 export type VerificationBasis =
-  | 'field_check'
-  | 'official_source'
-  | 'second_report'
-  | 'phone_confirmation'
-  | 'photo_evidence';
+  | "field_check"
+  | "official_source"
+  | "second_report"
+  | "phone_confirmation"
+  | "photo_evidence";
 
 export interface VerificationData {
   verifierName: string;
@@ -102,8 +95,8 @@ export interface VerificationData {
   verifierOffice: string;
   verifiedAt: string;
   basis: VerificationBasis;
-  confidence: 'low' | 'medium' | 'high';
-  severityAssessment: 'mild' | 'moderate' | 'severe' | 'critical';
+  confidence: "low" | "medium" | "high";
+  severityAssessment: "mild" | "moderate" | "severe" | "critical";
   internalNotes?: string;
   publicUpdate?: string;
   duplicateOfId?: string;
@@ -120,6 +113,10 @@ export interface AssignmentData {
 export interface IncidentReport {
   id: string;
   clientReportId: string;
+  ownerUserId?: string | null;
+  barangayCode?: string;
+  locationSource?: "gps" | "manual" | "legacy";
+  isPublic?: boolean;
   referenceNumber: string;
   category: ReportCategory;
   description: string;
@@ -142,7 +139,7 @@ export interface IncidentReport {
   livelihoodDetails?: {
     cropType?: string;
     affectedAreaHa?: number;
-    boatType?: 'motorized' | 'non_motorized' | 'fishing_gear';
+    boatType?: "motorized" | "non_motorized" | "fishing_gear";
     livestockType?: string;
     estimatedValueLossPhp?: number;
   };
@@ -157,43 +154,48 @@ export interface Facility {
   id: string;
   name: string;
   type:
-    | 'evacuation_center'
-    | 'hospital_health_center'
-    | 'barangay_hall'
-    | 'police_fire_rescue'
-    | 'mdrrm_office'
-    | 'seaport_landing'
-    | 'water_source';
+    | "evacuation_center"
+    | "hospital_health_center"
+    | "barangay_hall"
+    | "police_fire_rescue"
+    | "mdrrm_office"
+    | "seaport_landing"
+    | "water_source";
   municipality: Municipality;
   barangay: string;
-  lat: number;
-  lng: number;
-  operatingStatus: 'operational' | 'at_capacity' | 'standby' | 'damaged' | 'closed';
-  capacity: number;
+  lat: number | null;
+  lng: number | null;
+  operatingStatus:
+    "operational" | "at_capacity" | "standby" | "damaged" | "closed";
+  capacity: number | null;
   currentOccupancy: number;
-  contactNumber: string;
+  contactNumber: string | null;
   hasWater: boolean;
   hasPower: boolean;
   hasComms: boolean;
   accessibilityNotes: string;
   lastVerified: string;
   source: string;
+  sourceUrl?: string;
+  verificationStatus: "unverified" | "verified";
+  coordinateAccuracy: "unknown" | "approximate" | "surveyed";
 }
 
 export interface OfficialAdvisory {
   id: string;
-  issuer: 'PAGASA' | 'PHIVOLCS' | 'NDRRMC' | 'PDRRMO Marinduque' | 'MDRRMO';
+  issuer: "PAGASA" | "PHIVOLCS" | "NDRRMC" | "PDRRMO Marinduque" | "MDRRMO";
   title: string;
-  category: 'weather' | 'evacuation' | 'hazard';
-  sourceUrl?: string;
+  category: "weather" | "evacuation" | "hazard";
+  sourceUrl: string;
+  municipality?: Municipality | null;
   issuanceTime: string;
   validityPeriod?: string;
   lastRetrievedAt?: string;
-  verificationStatus: 'current' | 'expired' | 'unverified';
+  verificationStatus: "current" | "expired" | "unverified";
   scope: string;
   content: string;
-  status: 'active' | 'superseded' | 'cancelled';
-  severity: 'info' | 'warning' | 'severe' | 'emergency';
+  status: "active" | "superseded" | "cancelled";
+  severity: "info" | "warning" | "severe" | "emergency";
   signalNumber?: number; // For TCWS
 }
 
@@ -213,7 +215,7 @@ export interface SyncLog {
   id: string;
   clientReportId: string;
   attemptNumber: number;
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   timestamp: string;
   message: string;
 }

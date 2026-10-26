@@ -1,46 +1,65 @@
-import React from 'react';
-import { useApp } from '../context/AppContext';
-import { WifiOff, CheckCircle2, X } from 'lucide-react';
-
-export const OfflineStatusBar: React.FC = () => {
-  const { isOffline, isSimulatedOffline, outboxCount, activeToast, clearToast } = useApp();
-
+import { WifiOff, CloudUpload, Check, X } from "lucide-react";
+import { useApp } from "../context/AppContext";
+export function OfflineStatusBar() {
+  const app = useApp();
   return (
     <>
-      {/* Toast Notification */}
-      {activeToast && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-md bg-marine-900 border border-coral-500/80 text-white px-4 py-3 rounded-lg shadow-xl flex items-center justify-between text-xs animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-medium">{activeToast}</span>
-          </div>
-          <button onClick={clearToast} className="ml-3 text-sand-300 hover:text-white">
-            <X className="w-4 h-4" />
+      <div
+        role="status"
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-200 bg-white px-4 py-2 text-xs text-charcoal-600 md:px-8"
+      >
+        <span className="flex items-center gap-2">
+          {app.isOffline ? (
+            <WifiOff className="h-3.5 w-3.5 text-amber-700" />
+          ) : (
+            <span className="h-1.5 w-1.5 rounded-full bg-forest-500" />
+          )}
+          {app.isOffline
+            ? "Offline · cached information may be outdated"
+            : app.backendConfigured
+              ? "Online · cloud connection configured"
+              : "Local mode · cloud connection not configured"}
+        </span>
+        {app.outboxCount > 0 ? (
+          <button
+            onClick={() => void app.syncNow()}
+            disabled={app.isOffline || app.isSyncing}
+            className="flex items-center gap-1.5 font-semibold text-marine-900 disabled:opacity-60"
+          >
+            <CloudUpload className="h-4 w-4" />
+            {app.outboxCount} saved on device —{" "}
+            {app.isSyncing ? "syncing…" : "waiting to sync"}
           </button>
-        </div>
+        ) : (
+          <span className="flex items-center gap-1">
+            <Check className="h-3 w-3" />
+            Outbox empty
+          </span>
+        )}
+      </div>
+      {app.syncError && (
+        <p
+          role="status"
+          className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 md:px-8"
+        >
+          {app.syncError}
+        </p>
       )}
-
-      {/* Persistent Offline Banner if offline */}
-      {isOffline && (
-        <div className="bg-amber-600/90 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-inner">
-          <div className="flex items-center space-x-2">
-            <WifiOff className="w-4 h-4 shrink-0 text-white" />
-            <span>
-              <strong>OFFLINE OPERATION ACTIVE</strong> {isSimulatedOffline ? '(Simulated Mode)' : ''} &mdash; 
-              You can record incidents, check cached evacuation centers, and draft damage reports. Reports stay on this device; server delivery is not configured.
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            {outboxCount > 0 ? (
-              <span className="bg-amber-800 text-amber-100 font-bold px-2 py-0.5 rounded text-[11px]">
-                {outboxCount} report{outboxCount > 1 ? 's' : ''} in outbox
-              </span>
-            ) : (
-              <span className="text-amber-100 text-[11px]">Outbox empty</span>
-            )}
-          </div>
+      {app.activeToast && (
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-[90] mx-4 flex max-w-md items-start gap-3 rounded-xl border border-sand-300 bg-marine-900 p-4 text-sm text-white shadow-xl"
+        >
+          <span>{app.activeToast}</span>
+          <button
+            onClick={app.clearToast}
+            aria-label="Dismiss notification"
+            className="rounded p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
     </>
   );
-};
+}

@@ -1,628 +1,471 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
-import {
-  MUNICIPALITIES,
-  BARANGAYS,
-  CATEGORIES
-} from '../data/marinduqueData';
-import {
-  Municipality,
-  ReportCategory,
-  UrgencyLevel
-} from '../types';
-import {
-  Send,
-  MapPin,
-  Camera,
-  AlertTriangle,
-  Info,
-  CheckCircle,
-  ShieldCheck,
-  Sprout,
-  Anchor,
-  Clock,
-  Compass
-} from 'lucide-react';
-
-export const ReportForm: React.FC = () => {
-  const { isOffline, submitReport, currentUser, setActiveTab } = useApp();
-
-  const [category, setCategory] = useState<ReportCategory>('flooding');
-  const [municipality, setMunicipality] = useState<Municipality>('Boac');
-  const [barangay, setBarangay] = useState('Cawit');
-  const [sitioOrLandmark, setSitioOrLandmark] = useState('');
-  const [description, setDescription] = useState('');
-  const [urgency, setUrgency] = useState<UrgencyLevel>('elevated');
-  const [immediateDanger, setImmediateDanger] = useState(false);
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [reporterName, setReporterName] = useState(currentUser.name);
-  const [reporterContact, setReporterContact] = useState(currentUser.contactNumber || '');
-  
-  // Livelihood fields
-  const [cropType, setCropType] = useState('Coconut / Palay');
-  const [affectedAreaHa, setAffectedAreaHa] = useState<number>(2.0);
-  const [boatType, setBoatType] = useState<'motorized' | 'non_motorized' | 'fishing_gear'>('motorized');
-  const [estimatedLoss, setEstimatedLoss] = useState<number>(50000);
-
-  // GPS Coordinates
-  const [lat, setLat] = useState<number>(13.4112);
-  const [lng, setLng] = useState<number>(121.8156);
-  const [locationCaptured, setLocationCaptured] = useState(true);
-
-  // Photo simulation
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  // Privacy consent
-  const [consentGiven, setConsentGiven] = useState(true);
-
-  // Submitting state & Success Modal
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-
-  // Filter barangays for selected municipality
-  const availableBarangays = BARANGAYS.filter((b) => b.municipality === municipality);
-
-  const handleMunicipalityChange = (m: Municipality) => {
-    setMunicipality(m);
-    const firstBgy = BARANGAYS.find((b) => b.municipality === m);
-    if (firstBgy) {
-      setBarangay(firstBgy.name);
-      setLat(firstBgy.lat);
-      setLng(firstBgy.lng);
+import { useState } from "react";
+import { MapContainer } from "react-leaflet";
+import { LocateFixed, Send, CloudUpload, CheckCircle2 } from "lucide-react";
+import { useApp } from "../context/AppContext";
+import { BARANGAYS, MUNICIPALITIES, CATEGORIES } from "../data/marinduqueData";
+import type { Municipality, ReportCategory, UrgencyLevel } from "../types";
+import { MARINDUQUE_BOUNDS, MARINDUQUE_CENTER, inMarinduque } from "../lib/geo";
+import { Basemap, LocationPicker, MapLimits } from "./MapParts";
+import { Button } from "./ui/button";
+export function ReportForm() {
+  const app = useApp();
+  const [municipality, setMunicipality] = useState<Municipality>("Boac");
+  const bgys = BARANGAYS.filter((b) => b.municipality === municipality);
+  const [barangayCode, setBarangay] = useState(bgys[0].psgcCode),
+    [category, setCategory] = useState<ReportCategory>("flooding"),
+    [description, setDescription] = useState(""),
+    [landmark, setLandmark] = useState("");
+  const [urgency, setUrgency] = useState<UrgencyLevel>("elevated"),
+    [position, setPosition] = useState<[number, number] | null>(null),
+    [locationSource, setLocationSource] = useState<"gps" | "manual">("manual"),
+    [locationMessage, setLocationMessage] = useState(
+      "Choose a pin on the map, enter coordinates, or use your device GPS.",
+    );
+  const [latText, setLatText] = useState(""),
+    [lngText, setLngText] = useState("");
+  const [anonymous, setAnonymous] = useState(true),
+    [name, setName] = useState(""),
+    [contact, setContact] = useState(""),
+    [consent, setConsent] = useState(false),
+    [busy, setBusy] = useState(false),
+    [success, setSuccess] = useState(""),
+    [error, setError] = useState("");
+  const [crop, setCrop] = useState(""),
+    [area, setArea] = useState(""),
+    [loss, setLoss] = useState("");
+  function updatePin(p: [number, number], source: "manual" | "gps" = "manual") {
+    setPosition(p);
+    setLatText(p[0].toFixed(6));
+    setLngText(p[1].toFixed(6));
+    setLocationSource(source);
+    setLocationMessage(
+      source === "gps"
+        ? "Device GPS location captured. Check the pin before submitting."
+        : "Manual incident pin selected.",
+    );
+  }
+  function gps() {
+    if (!navigator.geolocation) {
+      setLocationMessage(
+        "GPS is unavailable. Tap the map or enter coordinates instead.",
+      );
+      return;
     }
-  };
-
-  const handleBarangayChange = (bName: string) => {
-    setBarangay(bName);
-    const bgyObj = availableBarangays.find((b) => b.name === bName);
-    if (bgyObj) {
-      setLat(bgyObj.lat);
-      setLng(bgyObj.lng);
-    }
-  };
-
-  // Simulate acquiring current device GPS coordinates in Marinduque
-  const captureCurrentLocation = () => {
-    const selectedBgy = availableBarangays.find((b) => b.name === barangay);
-    if (selectedBgy) {
-      // Add slight micro-offset for realism
-      const offsetLat = selectedBgy.lat + (Math.random() - 0.5) * 0.003;
-      const offsetLng = selectedBgy.lng + (Math.random() - 0.5) * 0.003;
-      setLat(Number(offsetLat.toFixed(5)));
-      setLng(Number(offsetLng.toFixed(5)));
-      setLocationCaptured(true);
-    }
-  };
-
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+    setLocationMessage("Requesting device location…");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (!inMarinduque(coords.latitude, coords.longitude)) {
+          setLocationMessage(
+            "Your device is outside Marinduque. Select the incident location manually.",
+          );
+          return;
+        }
+        updatePin([coords.latitude, coords.longitude], "gps");
+      },
+      () =>
+        setLocationMessage(
+          "GPS was denied or unavailable. Tap the map or enter coordinates instead.",
+        ),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  }
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!description.trim()) {
-      alert('Please provide a short description of what you observed.');
+    setError("");
+    if (!position) {
+      setError("Select the incident pin before saving.");
       return;
     }
-    if (!consentGiven) {
-      alert('Please accept the privacy and data processing notice.');
+    if (!consent) {
+      setError("Please accept the privacy notice.");
       return;
     }
-
-    setIsSubmitting(true);
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-    const reportPayload = {
-      category,
-      municipality,
-      barangay,
-      sitioOrLandmark: sitioOrLandmark.trim() || 'Central Purok',
-      description: description.trim(),
-      observationTime: nowStr,
-      reportedTime: nowStr,
-      lat,
-      lng,
-      urgency,
-      immediateDanger,
-      reporterRole: currentUser.role,
-      reporterName: isAnonymous ? 'Anonymous Resident' : reporterName,
-      reporterContact: isAnonymous ? '' : reporterContact,
-      isAnonymous,
-      photoUrl: photoPreview || undefined,
-      livelihoodDetails:
-        category === 'agriculture_damage'
-          ? {
-              cropType,
-              affectedAreaHa,
-              estimatedValueLossPhp: estimatedLoss
-            }
-          : category === 'fisheries_damage'
-          ? {
-              boatType,
-              estimatedValueLossPhp: estimatedLoss
-            }
-          : undefined
-    };
-
+    setBusy(true);
     try {
-      const refNumber = await submitReport(reportPayload);
-      setSubmittedRef(refNumber);
+      const now = new Date().toISOString();
+      const ref = await app.submitReport({
+        category,
+        municipality,
+        barangay: bgys.find((b) => b.psgcCode === barangayCode)!.name,
+        barangayCode,
+        description,
+        observationTime: now,
+        reportedTime: now,
+        sitioOrLandmark: landmark,
+        lat: position[0],
+        lng: position[1],
+        locationSource,
+        urgency,
+        immediateDanger: urgency === "immediate_danger",
+        reporterRole: app.currentUser.role,
+        reporterName: anonymous ? undefined : name,
+        reporterContact: anonymous ? undefined : contact,
+        isAnonymous: anonymous,
+        livelihoodDetails:
+          category === "agriculture_damage"
+            ? {
+                cropType: crop,
+                affectedAreaHa: area ? Number(area) : undefined,
+                estimatedValueLossPhp: loss ? Number(loss) : undefined,
+              }
+            : category === "fisheries_damage"
+              ? { estimatedValueLossPhp: loss ? Number(loss) : undefined }
+              : undefined,
+      });
+      setSuccess(ref);
+      setDescription("");
     } catch (err) {
-      console.error(err);
-      alert('Failed to save report. Please check storage permissions.');
+      setError(
+        err instanceof Error ? err.message : "Report could not be saved.",
+      );
     } finally {
-      setIsSubmitting(false);
+      setBusy(false);
     }
-  };
-
-  const selectedCategoryMeta = CATEGORIES.find((c) => c.id === category);
-
+  }
+  const mine = app.reports.filter(
+    (r) =>
+      !r.isPublic && (r.ownerUserId === app.currentUser.id || !r.ownerUserId),
+  );
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      {/* Success Modal */}
-      {submittedRef && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center border-t-4 border-coral-500 animate-in zoom-in-95">
-            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8" />
-            </div>
-            <h3 className="font-display font-bold text-xl text-marine-900 mb-1">
-              Report Successfully Recorded!
-            </h3>
-            <p className="text-xs text-charcoal-600 mb-4">
-              Reference Number:{' '}
-              <span className="font-mono font-bold text-coral-600 bg-sand-100 px-2 py-0.5 rounded">
-                {submittedRef}
-              </span>
-            </p>
-
-            <div className="bg-sand-50 border border-sand-200 rounded-lg p-3 text-left text-xs space-y-1.5 mb-5 text-charcoal-700">
-              <div className="flex justify-between">
-                <span className="text-charcoal-500">Storage Status:</span>
-                <span className="font-semibold text-marine-800">
-                  Saved locally — pending server delivery
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-charcoal-500">Location:</span>
-                <span>
-                  {barangay}, {municipality}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-charcoal-500">Category:</span>
-                <span className="capitalize">{selectedCategoryMeta?.label}</span>
-              </div>
-              <p className="text-[11px] text-charcoal-500 pt-2 border-t border-sand-200">
-                Your report is saved in this device’s IndexedDB outbox. It has not been sent to the MDRRMO because no backend connection is configured.
-              </p>
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setSubmittedRef(null);
-                  setDescription('');
-                  setSitioOrLandmark('');
-                  setPhotoPreview(null);
-                }}
-                className="flex-1 py-2.5 px-4 bg-sand-200 hover:bg-sand-300 text-marine-900 font-semibold text-xs rounded-lg transition-colors"
-              >
-                Submit Another Report
-              </button>
-              <button
-                onClick={() => {
-                  setSubmittedRef(null);
-                  setActiveTab('map');
-                }}
-                className="flex-1 py-2.5 px-4 bg-marine-900 hover:bg-marine-800 text-white font-semibold text-xs rounded-lg transition-colors shadow-sm"
-              >
-                View on Map
-              </button>
-            </div>
-          </div>
+    <div className="page-shell max-w-5xl">
+      <p className="eyebrow">Community observations</p>
+      <h1 className="page-title">Report an incident</h1>
+      <p className="page-description">
+        Share what you observed in Marinduque. Reports are reviewed by
+        authorized officers. For immediate danger, contact emergency services
+        directly.
+      </p>
+      {success && (
+        <div
+          role="status"
+          className="my-5 rounded-xl border border-forest-100 bg-forest-50 p-5 text-sm text-forest-700"
+        >
+          <p className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="h-5 w-5" />
+            Report saved on this device
+          </p>
+          <p className="mt-2 font-mono">{success}</p>
+          <p className="mt-2">
+            Waiting for server acknowledgment.{" "}
+            {app.currentUser.id === "guest"
+              ? "Sign in with Google when online to send it to your account."
+              : "The outbox synchronizes automatically when connected."}
+          </p>
         </div>
       )}
-
-      {/* Header Info */}
-      <div className="mb-6">
-        <div className="flex items-center space-x-2 text-coral-600 font-bold text-xs uppercase tracking-wider mb-1">
-          <Send className="w-4 h-4" />
-          <span>Structured Community Reporting</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-marine-900">
-          Report an Incident or Hazard
-        </h1>
-        <p className="text-xs sm:text-sm text-charcoal-600 mt-1">
-          Your report assists barangay and municipal DRRMO teams in verifying real-time conditions on the ground across Marinduque.
-        </p>
-
-        {isOffline && (
-          <div className="mt-3 bg-amber-50 border border-amber-300 text-amber-900 px-3 py-2 rounded-lg text-xs flex items-center space-x-2">
-            <Info className="w-4 h-4 text-amber-700 shrink-0" />
-            <span>
-              <strong>Offline Mode Active:</strong> You do not need an active internet connection. This report will be saved to your device and queued for automatic sync.
-            </span>
-          </div>
-        )}
-      </div>
-
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md border border-sand-200 p-5 sm:p-7 space-y-6">
-        {/* 1. Category Selection */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-2">
-            1. Incident or Damage Category <span className="text-coral-500">*</span>
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                type="button"
-                key={cat.id}
-                onClick={() => setCategory(cat.id)}
-                className={`p-2.5 text-left rounded-lg border text-xs flex flex-col justify-between transition-all ${
-                  category === cat.id
-                    ? 'border-marine-900 bg-marine-50/70 ring-2 ring-marine-900/20 font-bold text-marine-900'
-                    : 'border-sand-200 hover:border-sand-300 bg-sand-50/50 text-charcoal-700'
-                }`}
+      <form
+        onSubmit={submit}
+        className="mt-7 space-y-7 rounded-xl border border-sand-200 bg-white p-5 sm:p-7"
+      >
+        <fieldset>
+          <legend className="section-label">01 · What happened?</legend>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="field-label">
+              Incident category
+              <select
+                className="input"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as ReportCategory)}
               >
-                <div>
-                  <div className="font-semibold text-xs leading-tight mb-0.5">{cat.label}</div>
-                  <div className="text-[10px] text-charcoal-500 italic">{cat.tagalogLabel}</div>
-                </div>
-              </button>
-            ))}
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Urgency
+              <select
+                className="input"
+                value={urgency}
+                onChange={(e) => setUrgency(e.target.value as UrgencyLevel)}
+              >
+                <option value="routine">Routine</option>
+                <option value="elevated">Elevated concern</option>
+                <option value="urgent">Urgent</option>
+                <option value="immediate_danger">Immediate danger</option>
+              </select>
+            </label>
           </div>
-          {selectedCategoryMeta && (
-            <div className="mt-2 text-[11px] bg-sand-50 p-2.5 rounded border border-sand-200 text-charcoal-600">
-              <strong>Scope:</strong> {selectedCategoryMeta.description}{' '}
-              <span className="text-charcoal-500">e.g., {selectedCategoryMeta.examples}</span>
+          <label className="field-label mt-4">
+            Describe what you observed
+            <textarea
+              required
+              minLength={10}
+              maxLength={4000}
+              rows={4}
+              className="input resize-y"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What happened? Who or what is affected? What help is needed?"
+            />
+          </label>
+          {["agriculture_damage", "fisheries_damage"].includes(category) && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {category === "agriculture_damage" && (
+                <>
+                  <label className="field-label">
+                    Crop (optional)
+                    <input
+                      className="input"
+                      maxLength={100}
+                      value={crop}
+                      onChange={(e) => setCrop(e.target.value)}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Affected hectares (optional)
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      max="100000"
+                      step="0.01"
+                      value={area}
+                      onChange={(e) => setArea(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              <label className="field-label">
+                Estimated loss, PHP (optional)
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  max="1000000000"
+                  value={loss}
+                  onChange={(e) => setLoss(e.target.value)}
+                />
+              </label>
             </div>
           )}
-        </div>
-
-        {/* 2. Geographic Location */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-              Municipality <span className="text-coral-500">*</span>
-            </label>
-            <select
-              value={municipality}
-              onChange={(e) => handleMunicipalityChange(e.target.value as Municipality)}
-              className="w-full text-xs font-semibold bg-sand-50 border border-sand-300 rounded-lg p-2.5 text-marine-900 focus:ring-2 focus:ring-marine-800 focus:outline-none"
-            >
-              {MUNICIPALITIES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-              Barangay <span className="text-coral-500">*</span>
-            </label>
-            <select
-              value={barangay}
-              onChange={(e) => handleBarangayChange(e.target.value)}
-              className="w-full text-xs font-semibold bg-sand-50 border border-sand-300 rounded-lg p-2.5 text-marine-900 focus:ring-2 focus:ring-marine-800 focus:outline-none"
-            >
-              {availableBarangays.map((b) => (
-                <option key={b.name} value={b.name}>
-                  {b.name} (PSGC: {b.psgcCode})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Sitio / Landmark & Coordinates */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-            Sitio, Purok, or Specific Landmark
-          </label>
-          <input
-            type="text"
-            value={sitioOrLandmark}
-            onChange={(e) => setSitioOrLandmark(e.target.value)}
-            placeholder="e.g., Purok 4 near Cawit fish landing, or km 5 Laylay junction"
-            className="w-full text-xs bg-sand-50 border border-sand-300 rounded-lg p-2.5 text-charcoal-900 focus:ring-2 focus:ring-marine-800 focus:outline-none"
-          />
-          <div className="mt-2 flex items-center justify-between text-[11px] text-charcoal-500">
-            <span className="flex items-center space-x-1">
-              <Compass className="w-3.5 h-3.5 text-marine-600" />
-              <span>
-                Coordinates: {lat.toFixed(4)}° N, {lng.toFixed(4)}° E
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={captureCurrentLocation}
-              className="text-marine-700 hover:text-marine-900 font-bold underline flex items-center space-x-1"
-            >
-              <MapPin className="w-3 h-3" />
-              <span>Update GPS Pin</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3. Description */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-            Incident Description & Situation <span className="text-coral-500">*</span>
-          </label>
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe what happened, what is blocked, how deep the flood water is, or what assistance is requested..."
-            className="w-full text-xs bg-sand-50 border border-sand-300 rounded-lg p-2.5 text-charcoal-900 focus:ring-2 focus:ring-marine-800 focus:outline-none"
-            required
-          />
-        </div>
-
-        {/* 4. Special Livelihood Sections if Agriculture or Fisheries */}
-        {category === 'agriculture_damage' && (
-          <div className="bg-forest-50/60 border border-forest-500/30 rounded-lg p-4 space-y-3">
-            <div className="flex items-center space-x-2 text-forest-700 font-bold text-xs uppercase tracking-wider">
-              <Sprout className="w-4 h-4" />
-              <span>Agriculture Damage Specifics</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Crop Commodity
-                </label>
-                <select
-                  value={cropType}
-                  onChange={(e) => setCropType(e.target.value)}
-                  className="w-full bg-white border border-sand-300 rounded p-1.5 text-xs font-medium"
-                >
-                  <option value="Coconut / Copra">Coconut / Copra</option>
-                  <option value="Palay / Rice">Palay / Rice</option>
-                  <option value="Banana Groves">Banana Groves</option>
-                  <option value="Vegetables / Legumes">Vegetables / Legumes</option>
-                  <option value="Root Tubers / Cassava">Root Tubers / Cassava</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Affected Area (Hectares)
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  value={affectedAreaHa}
-                  onChange={(e) => setAffectedAreaHa(Number(e.target.value))}
-                  className="w-full bg-white border border-sand-300 rounded p-1.5 text-xs font-medium"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Est. Loss (₱ PHP)
-                </label>
-                <input
-                  type="number"
-                  step="5000"
-                  value={estimatedLoss}
-                  onChange={(e) => setEstimatedLoss(Number(e.target.value))}
-                  className="w-full bg-white border border-sand-300 rounded p-1.5 text-xs font-medium"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {category === 'fisheries_damage' && (
-          <div className="bg-marine-50/80 border border-marine-500/30 rounded-lg p-4 space-y-3">
-            <div className="flex items-center space-x-2 text-marine-700 font-bold text-xs uppercase tracking-wider">
-              <Anchor className="w-4 h-4" />
-              <span>Fisheries & Coastal Gear Specifics</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Damage Type
-                </label>
-                <select
-                  value={boatType}
-                  onChange={(e) => setBoatType(e.target.value as any)}
-                  className="w-full bg-white border border-sand-300 rounded p-1.5 text-xs font-medium"
-                >
-                  <option value="motorized">Motorized Banca / Boat Hull Damage</option>
-                  <option value="non_motorized">Non-motorized Paddle Boat</option>
-                  <option value="fishing_gear">Fishing Nets / Fish Corral / Traps</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Est. Repair/Replacement Cost (₱ PHP)
-                </label>
-                <input
-                  type="number"
-                  step="5000"
-                  value={estimatedLoss}
-                  onChange={(e) => setEstimatedLoss(Number(e.target.value))}
-                  className="w-full bg-white border border-sand-300 rounded p-1.5 text-xs font-medium"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 5. Urgency Level */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-            Urgency Classification <span className="text-coral-500">*</span>
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { id: 'routine', label: 'Routine', desc: 'No immediate threat; for planning.' },
-              { id: 'elevated', label: 'Elevated', desc: 'Needs review or follow-up.' },
-              { id: 'urgent', label: 'Urgent', desc: 'Requires prompt attention.' },
-              { id: 'immediate_danger', label: 'Immediate Danger', desc: 'Active life safety threat.' }
-            ].map((u) => (
-              <button
-                type="button"
-                key={u.id}
-                onClick={() => {
-                  setUrgency(u.id as UrgencyLevel);
-                  if (u.id === 'immediate_danger') setImmediateDanger(true);
-                  else setImmediateDanger(false);
+        </fieldset>
+        <fieldset className="border-t border-sand-200 pt-6">
+          <legend className="section-label">02 · Where is it?</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="field-label">
+              Municipality
+              <select
+                className="input"
+                value={municipality}
+                onChange={(e) => {
+                  const m = e.target.value as Municipality;
+                  setMunicipality(m);
+                  setBarangay(
+                    BARANGAYS.find((b) => b.municipality === m)!.psgcCode,
+                  );
                 }}
-                className={`p-2 rounded-lg border text-left text-xs transition-all ${
-                  urgency === u.id
-                    ? u.id === 'immediate_danger'
-                      ? 'border-coral-600 bg-coral-50 text-coral-700 font-bold ring-2 ring-coral-500/20'
-                      : 'border-marine-900 bg-marine-50 text-marine-900 font-bold ring-2 ring-marine-900/20'
-                    : 'border-sand-200 bg-sand-50/50 text-charcoal-700'
-                }`}
               >
-                <div className="font-semibold text-xs">{u.label}</div>
-                <div className="text-[10px] text-charcoal-500 mt-0.5 leading-tight">{u.desc}</div>
-              </button>
-            ))}
+                {MUNICIPALITIES.map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Barangay
+              <select
+                className="input"
+                value={barangayCode}
+                onChange={(e) => setBarangay(e.target.value)}
+              >
+                {bgys.map((b) => (
+                  <option key={b.psgcCode} value={b.psgcCode}>
+                    {b.name} · {b.psgcCode}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-
-          {urgency === 'immediate_danger' && (
-            <div className="mt-2.5 p-3 bg-coral-50 border border-coral-300 rounded-lg text-xs text-coral-800 flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 text-coral-600 shrink-0 mt-0.5" />
-              <div>
-                <strong>Important Notice:</strong> Submitting "Immediate Danger" records the critical status in PULSO for verification, but <em>does not automatically dispatch emergency rescue teams</em>. If lives are in direct peril, please contact Marinduque PDRRMO Hotline: <strong>(042) 332-1011</strong> or Philippine National Police <strong>117</strong> immediately.
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 6. Photo / Visual Evidence */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-1.5">
-            Attach Photo Evidence (Optional)
+          <label className="field-label mt-4">
+            Sitio or landmark (optional)
+            <input
+              className="input"
+              maxLength={250}
+              value={landmark}
+              onChange={(e) => setLandmark(e.target.value)}
+            />
           </label>
-          <div className="flex items-center space-x-3">
-            <label className="cursor-pointer flex items-center space-x-1.5 bg-sand-100 hover:bg-sand-200 text-marine-900 text-xs font-semibold px-3 py-2 rounded-lg border border-sand-300 transition-colors">
-              <Camera className="w-4 h-4 text-marine-700" />
-              <span>Select Photo</span>
-              <input type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
-            </label>
-            {photoPreview && (
-              <div className="relative">
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  className="w-12 h-12 object-cover rounded border border-sand-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setPhotoPreview(null)}
-                  className="absolute -top-1.5 -right-1.5 bg-coral-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center font-bold"
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-            <span className="text-[11px] text-charcoal-500">
-              {photoPreview ? 'Photo attached' : 'Photos are stored locally in IndexedDB if offline.'}
-            </span>
+          <div className="my-4 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" onClick={gps}>
+              <LocateFixed className="h-4 w-4" />
+              Use device GPS
+            </Button>
+            <p
+              role="status"
+              className="max-w-md text-xs leading-5 text-charcoal-500"
+            >
+              {locationMessage}
+            </p>
           </div>
-        </div>
-
-        {/* 7. Reporter Identity & Anonymous Mode */}
-        <div className="border-t border-sand-200 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-marine-900">
-              Reporter Identification
-            </span>
-            <label className="flex items-center space-x-2 text-xs text-charcoal-700 cursor-pointer">
+          <div className="isolate z-0 h-64 overflow-hidden rounded-lg border border-sand-300">
+            <MapContainer
+              center={MARINDUQUE_CENTER}
+              zoom={11}
+              maxBounds={MARINDUQUE_BOUNDS}
+              maxBoundsViscosity={1}
+              minZoom={10}
+              className="h-full w-full"
+              aria-label="Select the incident location in Marinduque"
+            >
+              <Basemap satellite={false} />
+              <MapLimits />
+              <LocationPicker position={position} onChange={updatePin} />
+            </MapContainer>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="field-label">
+              Latitude
               <input
-                type="checkbox"
-                checked={isAnonymous}
-                onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="rounded border-sand-300 text-marine-800 focus:ring-marine-800"
+                className="input"
+                type="number"
+                step="any"
+                min="13.17"
+                max="13.64"
+                value={latText}
+                onChange={(e) => {
+                  setLatText(e.target.value);
+                  setPosition(null);
+                }}
               />
-              <span className="font-medium">Submit Anonymously</span>
             </label>
+            <label className="field-label">
+              Longitude
+              <input
+                className="input"
+                type="number"
+                step="any"
+                min="121.78"
+                max="122.18"
+                value={lngText}
+                onChange={(e) => {
+                  setLngText(e.target.value);
+                  setPosition(null);
+                }}
+              />
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              className="self-end"
+              onClick={() => {
+                const lat = Number(latText),
+                  lng = Number(lngText);
+                if (!latText || !lngText || !inMarinduque(lat, lng)) {
+                  setLocationMessage("Enter coordinates inside Marinduque.");
+                  return;
+                }
+                updatePin([lat, lng]);
+              }}
+            >
+              Set manual pin
+            </Button>
           </div>
-
-          {!isAnonymous && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Reporter Name
-                </label>
-                <input
-                  type="text"
-                  value={reporterName}
-                  onChange={(e) => setReporterName(e.target.value)}
-                  className="w-full bg-sand-50 border border-sand-300 rounded p-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-charcoal-700 mb-1">
-                  Contact Number (for verification follow-up)
-                </label>
-                <input
-                  type="text"
-                  value={reporterContact}
-                  onChange={(e) => setReporterContact(e.target.value)}
-                  placeholder="09XX-XXX-XXXX"
-                  className="w-full bg-sand-50 border border-sand-300 rounded p-2 text-xs"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 8. Privacy Notice & Consent (NPC Circular 16-03 Compliance) */}
-        <div className="bg-sand-50 border border-sand-200 rounded-lg p-3.5 text-[11px] text-charcoal-600 space-y-2">
-          <div className="flex items-center space-x-1.5 font-bold text-marine-900">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Data Privacy Act of 2012 Notice</span>
-          </div>
-          <p>
-            Information collected through PULSO is used solely by authorized Barangay and Municipal Disaster Risk Reduction and Management Councils (BDRRMC/MDRRMO) for incident verification, damage assessment, and humanitarian coordination. Reporter contact numbers are never published on open public map views.
-          </p>
-          <label className="flex items-center space-x-2 cursor-pointer font-semibold text-marine-900 pt-1">
+        </fieldset>
+        <fieldset className="border-t border-sand-200 pt-6">
+          <legend className="section-label">03 · Privacy & submission</legend>
+          <label className="flex items-center gap-3 text-sm">
             <input
               type="checkbox"
-              checked={consentGiven}
-              onChange={(e) => setConsentGiven(e.target.checked)}
-              className="rounded border-sand-300 text-marine-800 focus:ring-marine-800"
+              checked={anonymous}
+              onChange={(e) => setAnonymous(e.target.checked)}
+              className="h-4 w-4 accent-marine-900"
             />
-            <span>I confirm this report reflects true community observations and consent to DRRM verification processing.</span>
+            Do not include my name or phone number
           </label>
-        </div>
-
-        {/* Submit Button */}
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={isSubmitting || !consentGiven}
-            className={`w-full py-3 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center space-x-2 transition-all shadow-md ${
-              isOffline
-                ? 'bg-amber-600 hover:bg-amber-700'
-                : 'bg-marine-900 hover:bg-marine-800'
-            }`}
+          {!anonymous && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="field-label">
+                Name (optional)
+                <input
+                  className="input"
+                  maxLength={150}
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <label className="field-label">
+                Phone (optional)
+                <input
+                  className="input"
+                  type="tel"
+                  maxLength={100}
+                  autoComplete="tel"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
+          <p className="mt-4 text-xs leading-6 text-charcoal-500">
+            Your report is stored on this device and sent to Supabase after
+            sign-in and reconnection. Authorized officers for your municipality
+            can access submitted details. Verified public updates exclude
+            reporter contacts and internal notes. Avoid including private
+            information in the incident description. Using a signed-in account
+            still associates a report with that account.
+          </p>
+          <label className="mt-4 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              required
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 accent-marine-900"
+            />
+            I understand how my report will be stored and used for local
+            coordination.
+          </label>
+        </fieldset>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg bg-coral-50 p-3 text-sm text-coral-700"
           >
-            <Send className="w-4 h-4" />
-            <span>
-              {isSubmitting
-                ? 'Saving Record...'
-                : isOffline
-                ? 'Save to Device Outbox (Offline Mode)'
-                : 'Submit Verified Incident Report'}
-            </span>
-          </button>
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-200 pt-5">
+          <p className="flex items-center gap-2 text-xs text-charcoal-500">
+            <CloudUpload className="h-4 w-4" />
+            Works offline · safe in your device outbox
+          </p>
+          <Button type="submit" variant="coral" disabled={busy}>
+            <Send className="h-4 w-4" />
+            {busy ? "Saving…" : "Save report"}
+          </Button>
         </div>
       </form>
+      <section className="mt-7">
+        <h2 className="font-display text-xl font-semibold text-marine-900">
+          Your reports on this device / account
+        </h2>
+        {mine.length === 0 ? (
+          <p className="mt-3 text-sm text-charcoal-500">
+            No reports yet. Your saved reports and delivery status will appear
+            here.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-sand-200 rounded-xl border border-sand-200 bg-white">
+            {mine.map((r) => (
+              <li key={r.id} className="p-4">
+                <p className="text-xs font-bold text-marine-900">
+                  {r.referenceNumber} · {r.municipality}
+                </p>
+                <p className="my-2 text-sm">{r.description}</p>
+                <p className="text-xs text-charcoal-500">
+                  {r.syncedAt
+                    ? "Acknowledged by server"
+                    : "Saved on device — waiting to sync"}{" "}
+                  · {r.status.replaceAll("_", " ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
-};
+}

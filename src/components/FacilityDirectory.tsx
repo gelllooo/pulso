@@ -1,251 +1,372 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { MUNICIPALITIES } from '../data/marinduqueData';
-import { Facility } from '../types';
+import { SystemNotice } from "./SystemNotice";
+import { useState } from "react";
 import {
-  Building,
-  HeartPulse,
-  Anchor,
+  Building2,
+  MapPin,
   Phone,
-  Check,
-  X,
-  Droplets,
-  Zap,
-  Radio,
-  Search,
-  Filter,
-  Users,
-  ShieldCheck
-} from 'lucide-react';
-
-export const FacilityDirectory: React.FC = () => {
-  const { facilities, selectedMunicipalityFilter, setSelectedMunicipalityFilter, currentUser } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('All');
-
-  const filteredFacilities = facilities.filter((f) => {
-    if (selectedMunicipalityFilter !== 'All' && f.municipality !== selectedMunicipalityFilter) {
-      return false;
+  ExternalLink,
+  ShieldCheck,
+} from "lucide-react";
+import { useApp } from "../context/AppContext";
+import { BARANGAYS, MUNICIPALITIES } from "../data/marinduqueData";
+import type { Facility, Municipality } from "../types";
+import { canManageReports } from "../lib/permissions";
+import { supabase } from "../lib/supabase";
+import { Button } from "./ui/button";
+export function FacilityDirectory() {
+  const app = useApp();
+  const [query, setQuery] = useState(""),
+    [editing, setEditing] = useState<Facility | null>(null),
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false);
+  const items = app.facilities.filter(
+    (f) =>
+      (app.selectedMunicipalityFilter === "All" ||
+        f.municipality === app.selectedMunicipalityFilter) &&
+      `${f.name} ${f.barangay}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  async function save(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editing || !supabase) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const data = new FormData(e.currentTarget);
+      const payload = {
+        ...editing,
+        name: String(data.get("name")),
+        barangay: String(data.get("barangay")),
+        lat: Number(data.get("lat")),
+        lng: Number(data.get("lng")),
+        capacity: Number(data.get("capacity")),
+        currentOccupancy: Number(data.get("occupancy")),
+        contactNumber: String(data.get("contact")),
+        sourceUrl: String(data.get("source")),
+        source: "LGU-validated record",
+        verificationStatus: "verified",
+        coordinateAccuracy: "surveyed",
+        operatingStatus: String(data.get("status")),
+        accessibilityNotes: String(data.get("notes")),
+        lastVerified: new Date().toISOString(),
+      };
+      const { error } = await supabase.rpc("publish_facility", {
+        p_facility: payload,
+      });
+      if (error) throw error;
+      await app.refreshData();
+      setEditing(null);
+      setMessage("Validated facility published.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Facility could not be published.",
+      );
+    } finally {
+      setBusy(false);
     }
-    if (typeFilter !== 'All' && f.type !== typeFilter) {
-      return false;
-    }
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      const matchName = f.name.toLowerCase().includes(term);
-      const matchBgy = f.barangay.toLowerCase().includes(term);
-      return matchName || matchBgy;
-    }
-    return true;
-  });
-
-  const totalCapacity = facilities.reduce((acc, f) => acc + (f.type === 'evacuation_center' ? f.capacity : 0), 0);
-  const totalOccupancy = facilities.reduce((acc, f) => acc + (f.type === 'evacuation_center' ? f.currentOccupancy : 0), 0);
-
+  }
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center space-x-2 text-coral-600 font-bold text-xs uppercase tracking-wider mb-1">
-            <Building className="w-4 h-4" />
-            <span>Lifeline Infrastructure & Safe Havens</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-marine-900">
-            Facility & Evacuation Center Directory
-          </h1>
-          <p className="text-xs sm:text-sm text-charcoal-600 mt-0.5">
-            Verified local facilities, emergency capacities, critical utilities (water/power), and seaport landing status.
-          </p>
-        </div>
-
-        {/* Quick Capacity Meter Card */}
-        <div className="bg-white border border-sand-300 rounded-xl p-3 shadow-sm flex items-center space-x-4 text-xs">
-          <div>
-            <div className="text-[11px] text-charcoal-500 font-semibold uppercase">Total Evacuation Load</div>
-            <div className="text-lg font-bold text-marine-900">
-              {totalOccupancy.toLocaleString()} / {totalCapacity.toLocaleString()} <span className="text-xs font-normal text-charcoal-500">persons</span>
-            </div>
-          </div>
-          <div className="w-20 bg-sand-200 h-3 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${
-                (totalOccupancy / (totalCapacity || 1)) > 0.8 ? 'bg-coral-600' : 'bg-marine-700'
-              }`}
-              style={{ width: `${Math.min(100, (totalOccupancy / (totalCapacity || 1)) * 100)}%` }}
-            />
-          </div>
-        </div>
+    <div className="page-shell">
+      <p className="eyebrow">Community resources</p>
+      <SystemNotice name="facility_notice" />
+      <h1 className="page-title">Facilities & evacuation sites</h1>
+      <p className="page-description">
+        A directory for all six municipalities. Always confirm opening, capacity
+        and the route with your LGU.
+      </p>
+      <div
+        role="note"
+        className="my-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"
+      >
+        The initial inventory contains 18 candidate planning entries. These are
+        not confirmed evacuation destinations. Exact coordinates, barangay
+        assignments, capacity and public contacts require LGU validation.
+        Unknown values are left blank rather than invented.
       </div>
-
-      {/* Filter & Search Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-sand-200 p-4 mb-6 flex flex-wrap items-center gap-3 text-xs">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-charcoal-400 absolute left-3 top-2.5" />
+      <div className="my-5 flex flex-wrap gap-3">
+        <label className="field-label flex-1">
+          Search facilities
           <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search facility name or barangay (e.g., Moriones Arena, Cawit)..."
-            className="w-full bg-sand-50 border border-sand-300 rounded-lg pl-9 pr-3 py-2 text-xs focus:ring-1 focus:ring-marine-800 focus:outline-none"
+            className="input"
+            placeholder="Search name or barangay"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-        </div>
-
-        <select
-          value={selectedMunicipalityFilter}
-          onChange={(e) => setSelectedMunicipalityFilter(e.target.value as any)}
-          className="bg-sand-50 border border-sand-300 rounded-lg px-3 py-2 text-xs font-semibold text-marine-900 focus:outline-none"
-        >
-          <option value="All">All Municipalities</option>
-          {MUNICIPALITIES.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="bg-sand-50 border border-sand-300 rounded-lg px-3 py-2 text-xs text-charcoal-800 focus:outline-none"
-        >
-          <option value="All">All Facility Types</option>
-          <option value="evacuation_center">Evacuation Centers Only</option>
-          <option value="hospital_health_center">Hospitals & Health Centers</option>
-          <option value="seaport_landing">Seaports & Fish Landings</option>
-        </select>
+        </label>
+        <label className="field-label">
+          Municipality
+          <select
+            className="input"
+            value={app.selectedMunicipalityFilter}
+            onChange={(e) =>
+              app.setSelectedMunicipalityFilter(
+                e.target.value as Municipality | "All",
+              )
+            }
+          >
+            <option value="All">All municipalities</option>
+            {MUNICIPALITIES.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+        </label>
       </div>
-
-      {/* Facility Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredFacilities.map((fac) => {
-          const isEvac = fac.type === 'evacuation_center';
-          const isHospital = fac.type === 'hospital_health_center';
-          const isPort = fac.type === 'seaport_landing';
-          const occupancyRate = fac.capacity > 0 ? (fac.currentOccupancy / fac.capacity) * 100 : 0;
-
-          return (
-            <div
-              key={fac.id}
-              className="bg-white rounded-xl shadow-sm border border-sand-200 hover:border-sand-300 transition-all p-5 flex flex-col justify-between"
+      {message && (
+        <p role="status" className="my-4 rounded-lg bg-marine-50 p-3 text-sm">
+          {message}
+        </p>
+      )}
+      {editing && (
+        <form
+          onSubmit={save}
+          className="mb-6 rounded-xl border border-marine-100 bg-white p-5"
+        >
+          <h2 className="font-display text-xl text-marine-900">
+            Validate facility · {editing.municipality}
+          </h2>
+          <p className="mt-2 text-xs leading-6 text-charcoal-500">
+            Publish only after verifying this site with the LGU. Coordinates
+            must identify the actual site.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="field-label">
+              Validated facility name
+              <input
+                className="input"
+                name="name"
+                required
+                maxLength={200}
+                defaultValue={editing.name.replace(" — candidate", "")}
+              />
+            </label>
+            <label className="field-label">
+              Actual barangay
+              <select
+                className="input"
+                name="barangay"
+                defaultValue={editing.barangay}
+              >
+                {BARANGAYS.filter(
+                  (b) => b.municipality === editing.municipality,
+                ).map((b) => (
+                  <option key={b.psgcCode}>{b.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Exact latitude
+              <input
+                className="input"
+                name="lat"
+                required
+                type="number"
+                step="any"
+                min="13.17"
+                max="13.64"
+                defaultValue={editing.lat ?? ""}
+              />
+            </label>
+            <label className="field-label">
+              Exact longitude
+              <input
+                className="input"
+                name="lng"
+                required
+                type="number"
+                step="any"
+                min="121.78"
+                max="122.18"
+                defaultValue={editing.lng ?? ""}
+              />
+            </label>
+            <label className="field-label">
+              Validated capacity
+              <input
+                className="input"
+                name="capacity"
+                required
+                type="number"
+                min="0"
+                defaultValue={editing.capacity ?? ""}
+              />
+            </label>
+            <label className="field-label">
+              Current occupancy
+              <input
+                className="input"
+                name="occupancy"
+                required
+                type="number"
+                min="0"
+                defaultValue={editing.currentOccupancy}
+              />
+            </label>
+            <label className="field-label">
+              Public facility contact
+              <input
+                className="input"
+                name="contact"
+                required
+                maxLength={100}
+                minLength={5}
+                defaultValue={editing.contactNumber ?? ""}
+              />
+            </label>
+            <label className="field-label">
+              HTTPS source record
+              <input
+                className="input"
+                name="source"
+                required
+                type="url"
+                pattern="https://.*"
+                defaultValue=""
+              />
+            </label>
+            <label className="field-label">
+              Operating status
+              <select
+                className="input"
+                name="status"
+                defaultValue={editing.operatingStatus}
+              >
+                {[
+                  "operational",
+                  "at_capacity",
+                  "standby",
+                  "damaged",
+                  "closed",
+                ].map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Accessibility notes
+              <input className="input" name="notes" required maxLength={1000} />
+            </label>
+          </div>
+          <label className="my-4 flex items-start gap-2 text-sm">
+            <input type="checkbox" required className="mt-1" />I have confirmed
+            these details and the site’s designation with the responsible LGU.
+          </label>
+          <div className="flex gap-3">
+            <Button type="submit" disabled={busy}>
+              {busy ? "Publishing…" : "Publish validated facility"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditing(null)}
             >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                      isEvac
-                        ? 'bg-sky-100 text-sky-800'
-                        : isHospital
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-teal-100 text-teal-800'
-                    }`}
-                  >
-                    {fac.type.replace(/_/g, ' ')}
-                  </span>
-                  <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded capitalize ${
-                      fac.operatingStatus === 'operational'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : fac.operatingStatus === 'at_capacity'
-                        ? 'bg-coral-100 text-coral-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {fac.operatingStatus.replace(/_/g, ' ')}
-                  </span>
-                </div>
-
-                <h3 className="font-display font-bold text-base text-marine-900 mb-1">
-                  {fac.name}
-                </h3>
-                <div className="text-xs text-charcoal-600 mb-3">
-                  📍 {fac.barangay}, {fac.municipality}
-                </div>
-
-                {/* Capacity Gauge if Evacuation Center */}
-                {isEvac && (
-                  <div className="bg-sand-50 border border-sand-200 rounded-lg p-2.5 mb-3 text-xs">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-charcoal-500 flex items-center space-x-1">
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Current Occupancy</span>
-                      </span>
-                      <span className="font-bold text-marine-900">
-                        {fac.currentOccupancy} / {fac.capacity} ({occupancyRate.toFixed(0)}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-sand-200 h-2 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          occupancyRate > 90
-                            ? 'bg-coral-600'
-                            : occupancyRate > 60
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-600'
-                        }`}
-                        style={{ width: `${Math.min(100, occupancyRate)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Critical Utilities Checklist */}
-                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-semibold text-center mb-3">
-                  <div
-                    className={`py-1 rounded border flex items-center justify-center space-x-1 ${
-                      fac.hasWater
-                        ? 'bg-sky-50 text-sky-800 border-sky-200'
-                        : 'bg-sand-100 text-charcoal-400 border-sand-200 line-through'
-                    }`}
-                  >
-                    <Droplets className="w-3 h-3" />
-                    <span>Water</span>
-                  </div>
-                  <div
-                    className={`py-1 rounded border flex items-center justify-center space-x-1 ${
-                      fac.hasPower
-                        ? 'bg-amber-50 text-amber-800 border-amber-200'
-                        : 'bg-sand-100 text-charcoal-400 border-sand-200 line-through'
-                    }`}
-                  >
-                    <Zap className="w-3 h-3" />
-                    <span>Power</span>
-                  </div>
-                  <div
-                    className={`py-1 rounded border flex items-center justify-center space-x-1 ${
-                      fac.hasComms
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : 'bg-sand-100 text-charcoal-400 border-sand-200 line-through'
-                    }`}
-                  >
-                    <Radio className="w-3 h-3" />
-                    <span>Comms</span>
-                  </div>
-                </div>
-
-                {/* Accessibility Notes */}
-                <p className="text-[11px] text-charcoal-600 line-clamp-2 mb-3">
-                  {fac.accessibilityNotes}
-                </p>
-              </div>
-
-              {/* Card Footer: Verified date & Contact */}
-              <div className="pt-3 border-t border-sand-200 flex items-center justify-between text-xs">
-                <span className="text-[10px] text-charcoal-400">
-                  Verified: {fac.lastVerified}
-                </span>
-                <a
-                  href={`tel:${fac.contactNumber}`}
-                  className="font-bold text-marine-800 hover:text-marine-900 flex items-center space-x-1 text-xs"
-                >
-                  <Phone className="w-3.5 h-3.5 text-coral-600" />
-                  <span>{fac.contactNumber}</span>
-                </a>
-              </div>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {items.map((f) => (
+          <article
+            key={f.id}
+            className="rounded-xl border border-sand-200 bg-white p-5"
+          >
+            <div className="flex items-center justify-between">
+              <Building2
+                className={`h-6 w-6 ${f.verificationStatus === "verified" ? "text-forest-600" : "text-charcoal-500"}`}
+              />
+              <span
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${f.verificationStatus === "verified" ? "bg-forest-50 text-forest-700" : "bg-amber-50 text-amber-800"}`}
+              >
+                {f.verificationStatus === "verified"
+                  ? "LGU validated"
+                  : "Needs validation"}
+              </span>
             </div>
-          );
-        })}
+            <h2 className="mt-5 font-display text-lg font-semibold text-marine-900">
+              {f.name}
+            </h2>
+            <p className="mt-2 flex items-center gap-1 text-xs text-charcoal-500">
+              <MapPin className="h-3 w-3" />
+              {f.barangay}, {f.municipality}
+              {f.verificationStatus !== "verified"
+                ? " · assignment provisional"
+                : ""}
+            </p>
+            <dl className="my-4 grid grid-cols-2 gap-3 border-y border-sand-200 py-4 text-xs">
+              <div>
+                <dt className="text-charcoal-500">Capacity</dt>
+                <dd className="mt-1 font-semibold">
+                  {f.capacity === null
+                    ? "Not validated"
+                    : `${f.capacity} people`}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-charcoal-500">Coordinates</dt>
+                <dd className="mt-1 font-semibold">
+                  {f.lat === null || f.lng === null
+                    ? "Not validated"
+                    : `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}`}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs leading-6 text-charcoal-600">
+              {f.accessibilityNotes}
+            </p>
+            <p className="mt-3 flex items-center gap-2 text-xs">
+              <Phone className="h-3 w-3" />
+              {f.contactNumber ? (
+                <a
+                  className="underline"
+                  href={`tel:${f.contactNumber.replace(/[^+\d]/g, "")}`}
+                >
+                  {f.contactNumber}
+                </a>
+              ) : (
+                "Contact not validated"
+              )}
+            </p>
+            {f.verificationStatus === "verified" && (
+              <p className="mt-3 text-xs text-charcoal-500">
+                Last validated:{" "}
+                {new Date(f.lastVerified).toLocaleString("en-PH")}
+              </p>
+            )}
+            {f.sourceUrl && (
+              <a
+                href={f.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1 text-xs text-marine-700 underline"
+              >
+                {f.verificationStatus === "verified"
+                  ? "Source record"
+                  : "PSGC reference for area names"}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+            {canManageReports(app.currentUser, f.municipality) && (
+              <Button
+                className="mt-4 w-full"
+                variant="outline"
+                onClick={() => {
+                  setEditing(f);
+                  setMessage("");
+                }}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Validate site details
+              </Button>
+            )}
+          </article>
+        ))}
       </div>
+      {items.length === 0 && (
+        <p className="mt-5 text-sm text-charcoal-500">
+          No matching facilities.
+        </p>
+      )}
     </div>
   );
-};
+}

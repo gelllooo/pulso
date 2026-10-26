@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState } from "react";
+import { useApp } from "../context/AppContext";
 import {
   History,
   Shield,
@@ -7,12 +7,12 @@ import {
   Filter,
   CheckCircle,
   Clock,
-  ArrowRight
-} from 'lucide-react';
+  ArrowRight,
+} from "lucide-react";
 
 export const AuditTrailView: React.FC = () => {
   const { auditEvents } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
   const filteredEvents = auditEvents.filter((ev) => {
     if (!searchTerm.trim()) return true;
@@ -38,7 +38,9 @@ export const AuditTrailView: React.FC = () => {
             Immutable Audit Trail
           </h1>
           <p className="text-xs sm:text-sm text-charcoal-600 mt-0.5">
-            Every submission, verification decision, assignment, status transition, and offline synchronization attempt is permanently timestamped.
+            Every submission, verification decision, assignment, status
+            transition, and offline synchronization attempt is permanently
+            timestamped.
           </p>
         </div>
 
@@ -70,7 +72,10 @@ export const AuditTrailView: React.FC = () => {
         ) : (
           <div className="divide-y divide-sand-200">
             {filteredEvents.map((ev) => (
-              <div key={ev.id} className="p-4 hover:bg-sand-50/70 transition-colors text-xs">
+              <div
+                key={ev.id}
+                className="p-4 hover:bg-sand-50/70 transition-colors text-xs"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <div className="flex items-center space-x-2">
                     <span className="font-mono text-[11px] font-bold text-marine-900 bg-sand-100 border border-sand-300 px-2 py-0.5 rounded">
@@ -106,7 +111,8 @@ export const AuditTrailView: React.FC = () => {
                 </div>
 
                 <div className="mt-2 text-[10px] text-charcoal-400">
-                  Authorized Actor: <strong>{ev.actor}</strong> ({ev.actorRole.replace(/_/g, ' ')})
+                  Authorized Actor: <strong>{ev.actor}</strong> (
+                  {ev.actorRole.replace(/_/g, " ")})
                 </div>
               </div>
             ))}

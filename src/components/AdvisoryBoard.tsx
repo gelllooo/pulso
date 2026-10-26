@@ -1,547 +1,420 @@
-import React from 'react';
-import { useApp } from '../context/AppContext';
-import {
-  Radio,
-  ExternalLink,
-  ShieldAlert,
-  AlertTriangle,
-  Clock,
-  Compass,
-  FileCheck,
-  CheckCircle2,
-  Info,
-  CloudSun,
-  Droplets,
-  Wind
-} from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-const NEWS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const WEATHER_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 30 * 1000;
-
-const OFFICIAL_SOURCES = [
-  { label: 'PAGASA', url: 'https://pagasa.dost.gov.ph/' },
-  { label: 'PAGASA PANaHON', url: 'https://panahon.gov.ph/' },
-  { label: 'DOST-PHIVOLCS', url: 'https://www.phivolcs.dost.gov.ph/' },
-  { label: 'PHIVOLCS Official RSS', url: 'https://www.phivolcs.dost.gov.ph/feed/' },
-  { label: 'PAGASA PublicAlert', url: 'https://publicalert.pagasa.dost.gov.ph/' },
-  { label: 'PAGASA TenDay Forecast', url: 'https://tenday.pagasa.dost.gov.ph/' },
-  { label: 'GeoRisk Philippines', url: 'https://georisk.gov.ph/' },
-  { label: 'HazardHunterPH', url: 'https://hazardhunter.georisk.gov.ph/' }
+import { useEffect, useState } from "react";
+import { ExternalLink, Radio, ShieldCheck } from "lucide-react";
+import { useApp } from "../context/AppContext";
+import { canManageReports } from "../lib/permissions";
+import { supabase } from "../lib/supabase";
+import { MUNICIPALITIES } from "../data/marinduqueData";
+import { Button } from "./ui/button";
+const sources = [
+  { name: "PAGASA", url: "https://www.pagasa.dost.gov.ph/" },
+  { name: "PHIVOLCS", url: "https://www.phivolcs.dost.gov.ph/" },
+  { name: "NDRRMC", url: "https://ndrrmc.gov.ph/" },
 ];
-
-interface AgencyNewsItem {
-  title: string;
-  url: string;
-  publishedAt: string | null;
-  categories: string[];
-}
-
-interface SupplementalWeather {
-  current: {
-    time: string;
-    temperature_2m: number;
-    relative_humidity_2m: number;
-    precipitation: number;
-    wind_speed_10m: number;
-    wind_gusts_10m: number;
-    weather_code: number;
-  };
-}
-
-interface WeatherProxyResponse {
-  data: SupplementalWeather;
-  fetchedAt: number;
-}
-
-function isWeatherProxyResponse(value: unknown): value is WeatherProxyResponse {
-  if (!value || typeof value !== 'object' || !('data' in value) || !('fetchedAt' in value)) {
+export function officialSourceValid(issuer: string, value: string) {
+  try {
+    const url = new URL(value);
+    const domain =
+      issuer === "PAGASA"
+        ? "pagasa.dost.gov.ph"
+        : issuer === "PHIVOLCS"
+          ? "phivolcs.dost.gov.ph"
+          : issuer === "NDRRMC"
+            ? "ndrrmc.gov.ph"
+            : "";
+    return (
+      !!domain &&
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      (url.hostname === domain || url.hostname.endsWith(`.${domain}`))
+    );
+  } catch {
     return false;
   }
-  const payload = value as { data?: unknown; fetchedAt?: unknown };
-  if (typeof payload.fetchedAt !== 'number' || !payload.data || typeof payload.data !== 'object') {
-    return false;
+}
+type News = { title: string; url: string; publishedAt: string };
+export function AdvisoryBoard() {
+  const app = useApp();
+  const [news, setNews] = useState<News[]>([]),
+    [newsStatus, setNewsStatus] = useState("Loading agency news…"),
+    [retrieved, setRetrieved] = useState(""),
+    [stale, setStale] = useState(false),
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let stopped = false,
+      controller: AbortController | null = null;
+    async function refresh() {
+      if (controller) return;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 30000);
+      try {
+        const response = await fetch("/api/official/phivolcs/news", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok)
+          throw new Error(
+            "PHIVOLCS agency news is currently unavailable. Check the original agency website.",
+          );
+        const xml = new DOMParser().parseFromString(
+          await response.text(),
+          "application/xml",
+        );
+        if (xml.querySelector("parsererror"))
+          throw new Error("Agency feed could not be parsed.");
+        const items = [...xml.querySelectorAll("item")]
+          .flatMap((item) => {
+            const url = item.querySelector("link")?.textContent?.trim() || "";
+            if (!officialSourceValid("PHIVOLCS", url)) return [];
+            return [
+              {
+                title:
+                  item.querySelector("title")?.textContent || "Agency post",
+                url,
+                publishedAt: item.querySelector("pubDate")?.textContent || "",
+              },
+            ];
+          })
+          .sort(
+            (a, b) =>
+              (Date.parse(b.publishedAt) || 0) -
+              (Date.parse(a.publishedAt) || 0),
+          )
+          .slice(0, 10);
+        if (!stopped) {
+          setNews(items);
+          setRetrieved(response.headers.get("X-Feed-Fetched-At") || "");
+          setStale(response.headers.get("X-Feed-Stale") === "true");
+          setNewsStatus(items.length ? "" : "No agency posts returned.");
+        }
+      } catch (error) {
+        if (!stopped)
+          setNewsStatus(
+            error instanceof Error
+              ? error.message
+              : "Agency news is unavailable.",
+          );
+      } finally {
+        clearTimeout(timeout);
+        controller = null;
+      }
+    }
+    void refresh();
+    const timer = setInterval(() => void refresh(), 300000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      controller?.abort();
+    };
+  }, []);
+  async function publish(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!supabase) return;
+    const form = e.currentTarget,
+      data = new FormData(form),
+      issuer = String(data.get("issuer")),
+      url = String(data.get("source"));
+    setMessage("");
+    if (!officialSourceValid(issuer, url)) {
+      setMessage(
+        "Use an HTTPS original-source URL on the selected agency’s official domain.",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("official_advisories").insert({
+        issuer,
+        source_url: url,
+        title: String(data.get("title")),
+        content: String(data.get("content")),
+        category: String(data.get("category")),
+        severity: String(data.get("severity")),
+        municipality:
+          app.currentUser.role === "municipal_officer"
+            ? app.currentUser.scopeMunicipality
+            : String(data.get("municipality")) || null,
+        issued_at: new Date(String(data.get("issued"))).toISOString(),
+        expires_at: data.get("expires")
+          ? new Date(String(data.get("expires"))).toISOString()
+          : null,
+      });
+      if (error) throw error;
+      await app.refreshData();
+      form.reset();
+      setMessage("Source-attributed advisory published.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Publishing failed.");
+    } finally {
+      setBusy(false);
+    }
   }
-  const data = payload.data as { current?: unknown };
-  if (!data.current || typeof data.current !== 'object') return false;
-  const current = data.current as Record<string, unknown>;
-  return typeof current.time === 'string' &&
-    ['temperature_2m', 'relative_humidity_2m', 'precipitation', 'wind_speed_10m', 'wind_gusts_10m', 'weather_code']
-      .every((key) => typeof current[key] === 'number' && Number.isFinite(current[key]));
-}
-
-function describeWeatherCode(code: number) {
-  if (code === 0) return 'Clear sky';
-  if (code === 1) return 'Mainly clear';
-  if (code === 2) return 'Partly cloudy';
-  if (code === 3) return 'Overcast';
-  if (code === 45 || code === 48) return 'Fog';
-  if ([51, 53, 55, 56, 57].includes(code)) return 'Drizzle';
-  if ([61, 63, 65, 66, 67].includes(code)) return 'Rain';
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Snow';
-  if ([80, 81, 82].includes(code)) return 'Rain showers';
-  if ([95, 96, 99].includes(code)) return 'Thunderstorm';
-  return `Weather code ${code}`;
-}
-
-export const AdvisoryBoard: React.FC = () => {
-  const { advisories, crisisMode, setCrisisMode } = useApp();
-  const [agencyNews, setAgencyNews] = useState<AgencyNewsItem[]>([]);
-  const [feedRetrievedAt, setFeedRetrievedAt] = useState<string | null>(null);
-  const [feedIsStale, setFeedIsStale] = useState(false);
-  const [feedError, setFeedError] = useState<string | null>(null);
-  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [weather, setWeather] = useState<SupplementalWeather | null>(null);
-  const [weatherRetrievedAt, setWeatherRetrievedAt] = useState<string | null>(null);
-  const [weatherIsStale, setWeatherIsStale] = useState(false);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
-  const [isLoadingWeather, setIsLoadingWeather] = useState(false);
-  const feedRequestRef = useRef<AbortController | null>(null);
-  const weatherRequestRef = useRef<AbortController | null>(null);
-
-  const retrievePhivolcsNews = useCallback(async () => {
-    if (feedRequestRef.current) return;
-    const controller = new AbortController();
-    feedRequestRef.current = controller;
-    const timeoutId = window.setTimeout(() => {
-      controller.abort(new DOMException('PHIVOLCS feed request timed out.', 'TimeoutError'));
-    }, REQUEST_TIMEOUT_MS);
-
-    setIsLoadingFeed(true);
-    setFeedError(null);
-    try {
-      const response = await fetch('/api/official/phivolcs/news', {
-        cache: 'no-store',
-        signal: controller.signal
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error || `Official PHIVOLCS feed request failed (HTTP ${response.status}).`);
-      }
-
-      const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
-      if (xml.querySelector('parsererror') || xml.documentElement.tagName.toLowerCase() !== 'rss') {
-        throw new Error('The official PHIVOLCS feed returned invalid RSS data.');
-      }
-
-      const feedUrl = new URL('https://www.phivolcs.dost.gov.ph/');
-      const items = Array.from(xml.querySelectorAll('channel > item')).flatMap((item) => {
-        const title = item.querySelector('title')?.textContent?.trim();
-        const link = item.querySelector('link')?.textContent?.trim();
-        if (!title || !link) return [];
-        const itemUrl = new URL(link, feedUrl);
-        if (itemUrl.origin !== feedUrl.origin) return [];
-
-        const publishedAt = item.querySelector('pubDate')?.textContent?.trim();
-        const categories = Array.from(item.querySelectorAll('category'))
-          .map((category) => category.textContent?.trim())
-          .filter((category): category is string => Boolean(category));
-
-        return [{
-          title,
-          url: itemUrl.toString(),
-          publishedAt: publishedAt || null,
-          categories
-        }];
-      });
-
-      setAgencyNews(items);
-      const retrievedAt = response.headers.get('X-Feed-Fetched-At');
-      setFeedRetrievedAt(retrievedAt);
-      setFeedIsStale(response.headers.get('X-Feed-Stale') === 'true');
-    } catch (error) {
-      if (controller.signal.reason?.name !== 'AbortError') {
-        setFeedError(error instanceof Error ? error.message : 'Unable to retrieve the official PHIVOLCS feed.');
-        setFeedIsStale(true);
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      if (feedRequestRef.current === controller) feedRequestRef.current = null;
-      if (controller.signal.reason?.name !== 'AbortError') setIsLoadingFeed(false);
-    }
-  }, []);
-
-  const retrieveWeather = useCallback(async () => {
-    if (weatherRequestRef.current) return;
-    const controller = new AbortController();
-    weatherRequestRef.current = controller;
-    const timeoutId = window.setTimeout(() => {
-      controller.abort(new DOMException('Weather request timed out.', 'TimeoutError'));
-    }, REQUEST_TIMEOUT_MS);
-
-    setIsLoadingWeather(true);
-    setWeatherError(null);
-    try {
-      const response = await fetch('/api/supplemental/weather/marinduque', {
-        cache: 'no-store',
-        signal: controller.signal
-      });
-      const payload: unknown = await response.json();
-      if (!response.ok) {
-        const message = payload && typeof payload === 'object' && 'error' in payload &&
-          typeof payload.error === 'string'
-          ? payload.error
-          : `Supplemental weather request failed (HTTP ${response.status}).`;
-        throw new Error(message);
-      }
-      if (!isWeatherProxyResponse(payload)) {
-        throw new Error('The weather service returned an unexpected response.');
-      }
-
-      setWeather(payload.data);
-      setWeatherRetrievedAt(new Date(payload.fetchedAt).toISOString());
-      setWeatherIsStale(response.headers.get('X-Data-Stale') === 'true');
-    } catch (error) {
-      if (controller.signal.reason?.name !== 'AbortError') {
-        setWeatherIsStale(true);
-        setWeatherError(error instanceof Error ? error.message : 'Unable to retrieve supplemental weather data.');
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      if (weatherRequestRef.current === controller) weatherRequestRef.current = null;
-      if (controller.signal.reason?.name !== 'AbortError') setIsLoadingWeather(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const initialId = window.setTimeout(() => {
-      if (active) void retrievePhivolcsNews();
-    }, 0);
-    const intervalId = window.setInterval(() => {
-      if (active) void retrievePhivolcsNews();
-    }, NEWS_REFRESH_INTERVAL_MS);
-    return () => {
-      active = false;
-      window.clearTimeout(initialId);
-      window.clearInterval(intervalId);
-      feedRequestRef.current?.abort();
-    };
-  }, [retrievePhivolcsNews]);
-
-  useEffect(() => {
-    let active = true;
-    const initialId = window.setTimeout(() => {
-      if (active) void retrieveWeather();
-    }, 0);
-    const intervalId = window.setInterval(() => {
-      if (active) void retrieveWeather();
-    }, WEATHER_REFRESH_INTERVAL_MS);
-    return () => {
-      active = false;
-      window.clearTimeout(initialId);
-      window.clearInterval(intervalId);
-      weatherRequestRef.current?.abort();
-    };
-  }, [retrieveWeather]);
-
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center space-x-2 text-coral-600 font-bold text-xs uppercase tracking-wider mb-1">
-            <Radio className="w-4 h-4" />
-            <span>Official Information & Early Warning</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-marine-900">
-            Mandated Agency Advisories & Bulletins
-          </h1>
-          <p className="text-xs sm:text-sm text-charcoal-600 mt-0.5">
-            Static reference entries are not a live agency feed. Check the issuing agency for current instructions.
-          </p>
-        </div>
-
-        {/* Crisis Mode Toggle Card */}
-        <div className="bg-sand-100 border border-sand-300 rounded-xl p-3 flex items-center space-x-3 text-xs">
-          <div>
-            <div className="font-bold text-marine-900">Crisis Mode Interface</div>
-            <div className="text-[11px] text-charcoal-600">
-              {crisisMode ? 'High-contrast emergency layout enabled' : 'Normal monitoring layout'}
-            </div>
-          </div>
-          <button
-            onClick={() => setCrisisMode(!crisisMode)}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors shadow-sm ${
-              crisisMode
-                ? 'bg-coral-600 text-white hover:bg-coral-700'
-                : 'bg-marine-900 text-white hover:bg-marine-800'
-            }`}
+    <div className="page-shell">
+      <p className="eyebrow">Original sources. Clear attribution.</p>
+      <h1 className="page-title">Official advisories</h1>
+      <p className="page-description">
+        Agency advisories republished by authorized officers, with a direct link
+        to the original. Community reports appear in their own workspace.
+      </p>
+      <div className="my-6 grid gap-3 sm:grid-cols-3">
+        {sources.map((s) => (
+          <a
+            key={s.name}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-xl border border-sand-200 bg-white p-5 text-sm font-semibold text-marine-900"
           >
-            {crisisMode ? 'Deactivate Crisis' : 'Activate Crisis Mode'}
-          </button>
-        </div>
-      </div>
-
-      <nav aria-label="Official government information sources" className="mb-6 rounded-xl border border-sand-300 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-marine-900">
-          Official Government Sources
-        </h2>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {OFFICIAL_SOURCES.map((source) => (
-            <a
-              key={source.url}
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1 text-xs font-semibold text-marine-800 underline hover:text-marine-900"
-            >
-              <span>{source.label}</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          ))}
-        </div>
-      </nav>
-
-      <section aria-labelledby="weather-context-heading" className="mb-6 rounded-xl border border-sand-300 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 id="weather-context-heading" className="flex items-center gap-2 font-display text-lg font-bold text-marine-900">
-              <CloudSun className="h-5 w-5" />
-              Marinduque Weather Context
-            </h2>
-            <p className="mt-1 text-xs text-charcoal-600">
-              Supplemental weather-model data, not a PAGASA observation or official warning.
-            </p>
-            <p className="mt-1 text-[11px] text-charcoal-500">
-              Model time: {weather?.current.time || 'Not available'} · Retrieved: {weatherRetrievedAt ? new Date(weatherRetrievedAt).toLocaleString() : 'Not retrieved'}
-              {weatherIsStale ? ' (data may be stale)' : ''}
-            </p>
-            <p className="mt-1 text-[11px] text-charcoal-500">
-              Auto-refreshes every 15 minutes; upstream requests are limited to 3 attempts with an 8-second timeout each.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void retrieveWeather()}
-            disabled={isLoadingWeather}
-            className="rounded-lg bg-marine-900 px-3 py-2 text-xs font-semibold text-white hover:bg-marine-800 disabled:cursor-wait disabled:opacity-60"
-          >
-            {isLoadingWeather ? 'Refreshing…' : 'Refresh weather'}
-          </button>
-        </div>
-
-        {weatherError && (
-          <p role="alert" className="mb-3 rounded-lg border border-coral-200 bg-coral-50 p-3 text-xs text-coral-800">
-            {weatherError}
-          </p>
-        )}
-
-        {weather && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-sand-50 p-3">
-              <div className="text-[11px] text-charcoal-500">Conditions</div>
-              <div className="mt-1 font-semibold text-marine-900">{describeWeatherCode(weather.current.weather_code)}</div>
-            </div>
-            <div className="rounded-lg bg-sand-50 p-3">
-              <div className="text-[11px] text-charcoal-500">Temperature / humidity</div>
-              <div className="mt-1 font-semibold text-marine-900">
-                {weather.current.temperature_2m}°C / {weather.current.relative_humidity_2m}%
-              </div>
-            </div>
-            <div className="rounded-lg bg-sand-50 p-3">
-              <div className="flex items-center gap-1 text-[11px] text-charcoal-500"><Droplets className="h-3.5 w-3.5" /> Precipitation (past hour)</div>
-              <div className="mt-1 font-semibold text-marine-900">{weather.current.precipitation} mm</div>
-            </div>
-            <div className="rounded-lg bg-sand-50 p-3 sm:col-span-1">
-              <div className="flex items-center gap-1 text-[11px] text-charcoal-500"><Wind className="h-3.5 w-3.5" /> Wind / gusts</div>
-              <div className="mt-1 font-semibold text-marine-900">
-                {weather.current.wind_speed_10m} / {weather.current.wind_gusts_10m} km/h
-              </div>
-            </div>
-          </div>
-        )}
-
-        <p className="mt-3 text-[11px] text-charcoal-500">
-          <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">
-            Weather data by Open-Meteo.com
+            <span className="flex items-center gap-2">
+              <Radio className="h-4 w-4" />
+              {s.name}
+            </span>
+            <ExternalLink className="h-4 w-4" />
           </a>
-          {' · '}
-          Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY 4.0</a>.
-          Forecasts are model estimates and must not replace official agency instructions.
-        </p>
-      </section>
-
-      <section aria-labelledby="phivolcs-news-heading" className="mb-8 rounded-xl border border-sand-300 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 id="phivolcs-news-heading" className="font-display text-lg font-bold text-marine-900">
-              PHIVOLCS Agency News
-            </h2>
-            <p className="mt-1 text-xs text-charcoal-600">
-              Official general-purpose RSS feed. Entries may include news and notices; they are not represented as active warnings or advisories.
-            </p>
-            <p className="mt-1 text-[11px] text-charcoal-500">
-              Last successful retrieval: {feedRetrievedAt ? new Date(feedRetrievedAt).toLocaleString() : 'Not retrieved'}
-              {feedIsStale ? ' (showing cached feed; refresh failed)' : ''}
-            </p>
-            <p className="mt-1 text-[11px] text-charcoal-500">
-              Auto-refreshes every 5 minutes; upstream requests are limited to 3 attempts with an 8-second timeout each.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void retrievePhivolcsNews()}
-            disabled={isLoadingFeed}
-            className="rounded-lg bg-marine-900 px-3 py-2 text-xs font-semibold text-white hover:bg-marine-800 disabled:cursor-wait disabled:opacity-60"
-          >
-            {isLoadingFeed ? 'Refreshing…' : 'Refresh PHIVOLCS News'}
-          </button>
-        </div>
-
-        {feedError && (
-          <p role="alert" className="mb-3 rounded-lg border border-coral-200 bg-coral-50 p-3 text-xs text-coral-800">
-            {feedError}
-          </p>
-        )}
-
-        {agencyNews.length > 0 ? (
-          <ul className="divide-y divide-sand-200">
-            {agencyNews.slice(0, 10).map((item) => (
-              <li key={item.url} className="py-3 first:pt-0 last:pb-0">
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-sm text-marine-800 underline hover:text-marine-900"
-                >
-                  {item.title}
-                </a>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-charcoal-500">
-                  <span>Published: {item.publishedAt || 'Not supplied'}</span>
-                  {item.categories.length > 0 && <span>Category: {item.categories.join(', ')}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : !feedError && !isLoadingFeed ? (
-          <p className="text-xs text-charcoal-500">The official feed contains no entries.</p>
-        ) : null}
-      </section>
-
-      <div className="mb-3">
-        <h2 className="font-display text-lg font-bold text-marine-900">
-          Stored Sample Advisories
-        </h2>
-        <p className="text-xs text-charcoal-600">
-          These legacy examples are unverified reference records, not current official alerts.
-        </p>
+        ))}
       </div>
-
-      {/* Advisory Feed Cards */}
-      <div className="space-y-4">
-        {advisories.map((adv) => {
-          const isEmergency = adv.severity === 'emergency';
-          const isWarning = adv.severity === 'warning';
-          const freshnessClasses =
-            adv.verificationStatus === 'current'
-              ? 'bg-emerald-100 text-emerald-800'
-              : adv.verificationStatus === 'expired'
-              ? 'bg-slate-200 text-slate-700'
-              : 'bg-amber-100 text-amber-800';
-
-          return (
-            <div
-              key={adv.id}
-              className={`rounded-xl border p-5 shadow-sm bg-white transition-all ${
-                isEmergency
-                  ? 'border-l-4 border-l-coral-600 border-sand-300'
-                  : isWarning
-                  ? 'border-l-4 border-l-amber-500 border-sand-300'
-                  : 'border-l-4 border-l-sky-600 border-sand-300'
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-xs uppercase tracking-wider text-marine-900 bg-sand-100 border border-sand-300 px-2 py-0.5 rounded">
-                    {adv.issuer}
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                      isEmergency
-                        ? 'bg-coral-100 text-coral-800'
-                        : isWarning
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-sky-100 text-sky-800'
-                    }`}
-                  >
-                    {adv.severity}
-                  </span>
-                  <span className="rounded bg-marine-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-marine-800">
-                    {adv.category}
-                  </span>
-                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${freshnessClasses}`}>
-                    {adv.verificationStatus}
-                  </span>
-                  <span className="text-[11px] text-charcoal-500 font-mono">
-                    ID: {adv.id}
-                  </span>
-                </div>
-
-                <div className="flex items-center space-x-2 text-xs text-charcoal-500">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Issued: {adv.issuanceTime || 'Not supplied'}</span>
-                </div>
-              </div>
-
-              <h3 className="font-display font-bold text-base sm:text-lg text-marine-900 mb-1">
-                {adv.title}
-              </h3>
-
-              <div className="text-xs text-charcoal-600 mb-3">
-                <strong>Issuing agency:</strong> {adv.issuer} &bull; <strong>Scope:</strong> {adv.scope}
-              </div>
-
-              {adv.validityPeriod && (
-                <p className="mb-2 text-xs text-charcoal-600">
-                  <strong>Validity:</strong> {adv.validityPeriod}
-                </p>
-              )}
-              <p className="mb-3 text-xs text-charcoal-600">
-                <strong>Last successful retrieval:</strong> {adv.lastRetrievedAt || 'Not recorded'}
-              </p>
-
-              <p className="text-xs sm:text-sm text-charcoal-800 leading-relaxed bg-sand-50/70 p-3 rounded-lg border border-sand-200 mb-4">
-                {adv.content}
-              </p>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-sand-200 text-xs">
-                <span className="text-[11px] text-charcoal-500">
-                  Official source link, where available:
-                </span>
-                {adv.sourceUrl ? (
+      <section className="rounded-xl border border-marine-100 bg-marine-50 p-5">
+        <h2 className="flex items-center gap-2 font-semibold text-marine-900">
+          <ShieldCheck className="h-5 w-5" />
+          Source-attributed official advisories
+        </h2>
+        <p className="mt-2 text-xs leading-6 text-charcoal-600">
+          No supported PAGASA or NDRRMC RSS endpoint is configured. Authorized
+          municipal and provincial officers can post an original agency advisory
+          below. AI does not create or modify advisories.
+        </p>
+        {app.advisories.length === 0 ? (
+          <p className="mt-5 rounded-lg bg-white p-4 text-sm text-charcoal-600">
+            No official advisories have been published to PULSO. Check the
+            agency links above for current information.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-4">
+            {[...app.advisories]
+              .sort(
+                (a, b) =>
+                  Date.parse(b.issuanceTime) - Date.parse(a.issuanceTime),
+              )
+              .map((a) => (
+                <article
+                  key={a.id}
+                  className={`rounded-xl border bg-white p-5 ${a.verificationStatus === "expired" ? "border-sand-200 opacity-75" : "border-marine-100"}`}
+                >
+                  <div className="flex flex-wrap justify-between gap-2 text-[10px] font-bold uppercase tracking-wider">
+                    <span>
+                      {a.issuer} · {a.scope}
+                    </span>
+                    <span
+                      className={
+                        a.verificationStatus === "expired"
+                          ? "text-charcoal-500"
+                          : a.severity === "info"
+                            ? "text-marine-700"
+                            : "text-coral-700"
+                      }
+                    >
+                      {a.verificationStatus === "expired"
+                        ? "Expired"
+                        : a.severity}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 font-display text-lg font-semibold text-marine-900">
+                    {a.title}
+                  </h3>
+                  <p className="my-3 whitespace-pre-wrap text-sm leading-6 text-charcoal-600">
+                    {a.content}
+                  </p>
+                  <p className="text-xs text-charcoal-500">
+                    Issued {new Date(a.issuanceTime).toLocaleString("en-PH")}
+                    {a.validityPeriod
+                      ? ` · Valid until ${new Date(a.validityPeriod).toLocaleString("en-PH")}`
+                      : ""}
+                  </p>
                   <a
-                    href={adv.sourceUrl}
+                    href={a.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-bold text-marine-800 hover:text-marine-900 underline flex items-center space-x-1"
+                    className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-marine-700 underline"
                   >
-                    <span>
-                      {adv.issuer === 'PAGASA'
-                        ? 'Open Official PAGASA Portal'
-                        : 'Open Official HazardHunterPH Tool'}
-                    </span>
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    Read original {a.issuer} advisory
+                    <ExternalLink className="h-3 w-3" />
                   </a>
-                ) : (
-                  <span className="text-charcoal-500" title="No verifiable original source URL is available for this sample advisory.">
-                    Original source link unavailable
-                  </span>
-                )}
-              </div>
+                  {(a.municipality
+                    ? canManageReports(app.currentUser, a.municipality)
+                    : app.currentUser.role === "provincial_officer") && (
+                    <Button
+                      className="mt-3 block"
+                      variant="outline"
+                      disabled={busy || app.isOffline}
+                      onClick={async () => {
+                        if (!supabase) return;
+                        setBusy(true);
+                        const { error } = await supabase.rpc(
+                          "retract_advisory",
+                          { p_advisory_id: a.id },
+                        );
+                        setMessage(
+                          error?.message ||
+                            "Republication retracted. The source record is retained.",
+                        );
+                        if (!error) await app.refreshData();
+                        setBusy(false);
+                      }}
+                    >
+                      Retract this republication
+                    </Button>
+                  )}
+                </article>
+              ))}
+          </div>
+        )}
+      </section>
+      {canManageReports(app.currentUser) && (
+        <details className="my-6 rounded-xl border border-sand-200 bg-white p-5">
+          <summary className="cursor-pointer font-semibold text-marine-900">
+            Republish an original official advisory
+          </summary>
+          <form onSubmit={publish} className="mt-5 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="field-label">
+                Issuing agency
+                <select name="issuer" className="input">
+                  {sources.map((s) => (
+                    <option key={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                Original advisory URL
+                <input
+                  name="source"
+                  className="input"
+                  required
+                  type="url"
+                  maxLength={2000}
+                />
+              </label>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Official Deference Safeguard Notice */}
-      <div className="mt-8 bg-sand-100/80 border border-sand-300 rounded-xl p-4 text-xs text-charcoal-700 flex items-start space-x-3">
-        <Info className="w-5 h-5 text-marine-700 shrink-0 mt-0.5" />
-        <div>
-          <strong className="text-marine-900">Legal & Warning Authority Safeguard:</strong> PULSO operates strictly as a localized community information layer and does NOT issue independent tropical cyclone warnings, tsunami alerts, or evacuation orders. All warnings originate from PAGASA, PHIVOLCS, NDRRMC, and authorized local chief executives.
-        </div>
-      </div>
+            <label className="field-label">
+              Original title
+              <input
+                name="title"
+                className="input"
+                required
+                minLength={5}
+                maxLength={200}
+              />
+            </label>
+            <label className="field-label">
+              Source-attributed advisory content
+              <textarea
+                name="content"
+                className="input"
+                required
+                rows={4}
+                minLength={10}
+                maxLength={10000}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="field-label">
+                Category
+                <select name="category" className="input">
+                  {["weather", "evacuation", "hazard"].map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                Severity stated by the agency
+                <select name="severity" className="input">
+                  {["info", "warning", "severe", "emergency"].map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                Agency issuance time
+                <input
+                  name="issued"
+                  required
+                  type="datetime-local"
+                  className="input"
+                />
+              </label>
+              <label className="field-label">
+                Agency expiry time (optional)
+                <input name="expires" type="datetime-local" className="input" />
+              </label>
+              {app.currentUser.role === "provincial_officer" && (
+                <label className="field-label">
+                  Area covered
+                  <select name="municipality" className="input">
+                    <option value="">All of Marinduque</option>
+                    {MUNICIPALITIES.map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            <label className="flex items-start gap-2 text-xs leading-6">
+              <input type="checkbox" required className="mt-1.5" />I checked the
+              original source, its coverage, severity and validity. This is a
+              faithful republication.
+            </label>
+            <Button type="submit" disabled={busy || app.isOffline}>
+              {busy ? "Publishing…" : "Publish attributed advisory"}
+            </Button>
+          </form>
+        </details>
+      )}
+      {message && (
+        <p role="status" className="my-4 rounded-lg bg-sand-100 p-4 text-sm">
+          {message}
+        </p>
+      )}
+      <section className="mt-7 rounded-xl border border-sand-200 bg-white p-5">
+        <h2 className="font-display text-xl font-semibold text-marine-900">
+          PHIVOLCS agency news
+        </h2>
+        <p className="mt-2 text-xs leading-6 text-charcoal-500">
+          General agency posts, displayed separately from official warnings and
+          local reports. Refreshes every five minutes.
+          {retrieved
+            ? ` Retrieved ${new Date(retrieved).toLocaleString("en-PH")}.`
+            : ""}
+          {stale ? " Showing a previously retrieved copy." : ""}
+        </p>
+        {newsStatus && (
+          <p role="status" className="mt-3 text-sm text-charcoal-600">
+            {newsStatus}
+          </p>
+        )}
+        <ul className="mt-4 divide-y divide-sand-200">
+          {news.map((n) => (
+            <li key={n.url} className="py-4">
+              <a
+                href={n.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-marine-700 underline"
+              >
+                {n.title}
+                <ExternalLink className="ml-1 inline h-3 w-3" />
+              </a>
+              {Number.isFinite(Date.parse(n.publishedAt)) && (
+                <p className="mt-1 text-xs text-charcoal-500">
+                  {new Date(n.publishedAt).toLocaleString("en-PH")}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
-};
+}
