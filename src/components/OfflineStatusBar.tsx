@@ -1,9 +1,9 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { WifiOff, RefreshCw, CheckCircle2, X } from 'lucide-react';
+import { WifiOff, CheckCircle2, X } from 'lucide-react';
 
 export const OfflineStatusBar: React.FC = () => {
-  const { isOffline, isSimulatedOffline, outboxCount, isSyncing, syncNow, activeToast, clearToast } = useApp();
+  const { isOffline, isSimulatedOffline, outboxCount, activeToast, clearToast } = useApp();
 
   return (
     <>
@@ -27,7 +27,7 @@ export const OfflineStatusBar: React.FC = () => {
             <WifiOff className="w-4 h-4 shrink-0 text-white" />
             <span>
               <strong>OFFLINE OPERATION ACTIVE</strong> {isSimulatedOffline ? '(Simulated Mode)' : ''} &mdash; 
-              You can record incidents, check cached evacuation centers, and draft damage reports. All data is saved securely on your device.
+              You can record incidents, check cached evacuation centers, and draft damage reports. Reports stay on this device; server delivery is not configured.
             </span>
           </div>
           <div className="flex items-center space-x-2">

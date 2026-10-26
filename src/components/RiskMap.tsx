@@ -14,9 +14,18 @@ import {
   HeartPulse,
   Anchor,
   Eye,
-  Info
+  Info,
+  Search,
+  MapPin
 } from 'lucide-react';
 import L from 'leaflet';
+
+interface AddressSearchResult {
+  id: string;
+  lat: number;
+  lon: number;
+  displayName: string;
+}
 
 export const RiskMap: React.FC = () => {
   const { reports, facilities, selectedMunicipalityFilter, setSelectedMunicipalityFilter, setActiveTab } = useApp();
@@ -27,12 +36,18 @@ export const RiskMap: React.FC = () => {
   const [showFacilities, setShowFacilities] = useState(true);
   const [showHazardReference, setShowHazardReference] = useState(true);
   const [activeReportModal, setActiveReportModal] = useState<IncidentReport | null>(null);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [addressSearchError, setAddressSearchError] = useState<string | null>(null);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const facilitiesLayerRef = useRef<L.LayerGroup | null>(null);
   const hazardLayerRef = useRef<L.LayerGroup | null>(null);
+  const addressMarkerLayerRef = useRef<L.LayerGroup | null>(null);
+  const addressSearchRef = useRef<AbortController | null>(null);
 
   // Filtered reports
   const filteredReports = reports.filter((r) => {
@@ -69,26 +84,51 @@ export const RiskMap: React.FC = () => {
         maxZoom: 17
       });
 
-      // Standard OpenStreetMap base tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | PULSO Marinduque',
+      const satelliteLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: 'Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community',
+          maxZoom: 19
+        }
+      );
+      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
-      }).addTo(map);
+      });
+      satelliteLayer.addTo(map);
+      L.control.layers(
+        { Satellite: satelliteLayer, Streets: streetLayer },
+        undefined,
+        { position: 'topright', collapsed: false }
+      ).addTo(map);
 
       // Create Layer Groups
       const markersLayer = L.layerGroup().addTo(map);
       const facilitiesLayer = L.layerGroup().addTo(map);
       const hazardLayer = L.layerGroup().addTo(map);
+      const addressMarkerLayer = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
       facilitiesLayerRef.current = facilitiesLayer;
       hazardLayerRef.current = hazardLayer;
+      addressMarkerLayerRef.current = addressMarkerLayer;
     }
 
     return () => {
-      // Don't necessarily destroy on re-render, keep instance
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+      markersLayerRef.current = null;
+      facilitiesLayerRef.current = null;
+      hazardLayerRef.current = null;
+      addressMarkerLayerRef.current = null;
     };
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'map' || !mapInstanceRef.current) return;
+    const timeoutId = window.setTimeout(() => mapInstanceRef.current?.invalidateSize(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [viewMode]);
 
   // Update Map Markers when data or filters change
@@ -106,8 +146,8 @@ export const RiskMap: React.FC = () => {
         const statusBadge =
           rep.status === 'verified'
             ? '✓ Verified'
-            : rep.status === 'queued_offline'
-            ? '⏳ Offline Queue'
+            : rep.status === 'queued_offline' || rep.status === 'pending_sync'
+            ? '⏳ Pending Sync'
             : rep.status === 'assigned'
             ? '⚡ Assigned'
             : '● Received';
@@ -265,6 +305,96 @@ export const RiskMap: React.FC = () => {
     }
   }, [viewMode, filteredReports, filteredFacilities, showFacilities, showHazardReference]);
 
+  const searchAddress = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = addressQuery.trim();
+    if (query.length < 3 || query.length > 120) {
+      setAddressSearchError('Enter a place or address between 3 and 120 characters.');
+      setAddressResults([]);
+      return;
+    }
+
+    addressSearchRef.current?.abort();
+    const controller = new AbortController();
+    addressSearchRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+    setIsSearchingAddress(true);
+    setAddressSearchError(null);
+    setAddressResults([]);
+
+    try {
+      const response = await fetch(`/api/map/search?q=${encodeURIComponent(query)}`, {
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) {
+        const message = payload && typeof payload === 'object' && 'error' in payload &&
+          typeof payload.error === 'string'
+          ? payload.error
+          : `Address search failed (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      if (!payload || typeof payload !== 'object' || !('results' in payload) || !Array.isArray(payload.results)) {
+        throw new Error('Address search returned an unexpected response.');
+      }
+
+      const results = payload.results.flatMap((item): AddressSearchResult[] => {
+        if (!item || typeof item !== 'object') return [];
+        const result = item as Record<string, unknown>;
+        if (
+          typeof result.id !== 'string' ||
+          typeof result.displayName !== 'string' ||
+          typeof result.lat !== 'number' ||
+          typeof result.lon !== 'number' ||
+          !Number.isFinite(result.lat) ||
+          !Number.isFinite(result.lon)
+        ) return [];
+        return [{
+          id: result.id,
+          displayName: result.displayName,
+          lat: result.lat,
+          lon: result.lon
+        }];
+      });
+      setAddressResults(results);
+      if (results.length === 0) {
+        setAddressSearchError('No matching places were found in Marinduque.');
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setAddressSearchError(error instanceof Error ? error.message : 'Unable to search for that address.');
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (addressSearchRef.current === controller) {
+        addressSearchRef.current = null;
+        setIsSearchingAddress(false);
+      }
+    }
+  };
+
+  const focusAddressResult = (result: AddressSearchResult) => {
+    const map = mapInstanceRef.current;
+    const layer = addressMarkerLayerRef.current;
+    if (!map || !layer) return;
+
+    layer.clearLayers();
+    const marker = L.marker([result.lat, result.lon], {
+      icon: L.divIcon({
+        className: 'address-search-pin',
+        html: '<div style="background:#e05338;width:28px;height:28px;border-radius:50% 50% 50% 0;border:2px solid white;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28]
+      })
+    });
+    const popup = document.createElement('div');
+    popup.textContent = result.displayName;
+    marker.bindPopup(popup).addTo(layer);
+    map.setView([result.lat, result.lon], Math.max(map.getZoom(), 15));
+    marker.openPopup();
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
       {/* Top Controls: Title, View Switcher & Filter Bar */}
@@ -306,6 +436,57 @@ export const RiskMap: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {viewMode === 'map' && (
+          <div className="mb-3 border-t border-sand-200 pt-3">
+            <form onSubmit={(event) => void searchAddress(event)} className="flex flex-wrap gap-2">
+              <label htmlFor="map-address-search" className="sr-only">Search a Marinduque address or place</label>
+              <input
+                id="map-address-search"
+                type="search"
+                value={addressQuery}
+                onChange={(event) => setAddressQuery(event.target.value)}
+                maxLength={120}
+                placeholder="Search an address or place in Marinduque"
+                className="min-w-0 flex-1 rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm text-charcoal-900 placeholder:text-charcoal-500 focus:outline-none focus:ring-2 focus:ring-marine-700"
+              />
+              <button
+                type="submit"
+                disabled={isSearchingAddress}
+                className="inline-flex items-center gap-2 rounded-lg bg-marine-900 px-4 py-2 text-sm font-semibold text-white hover:bg-marine-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Search className="h-4 w-4" />
+                {isSearchingAddress ? 'Searching…' : 'Search map'}
+              </button>
+            </form>
+            <p className="mt-1.5 text-[11px] text-charcoal-600">
+              One search per submission; results are limited to Marinduque. Search terms are sent to{' '}
+              <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer" className="underline">
+                OpenStreetMap Nominatim
+              </a>
+              . Don&apos;t enter private or sensitive information.
+            </p>
+            {addressSearchError && (
+              <p role="alert" className="mt-2 text-xs font-medium text-coral-700">{addressSearchError}</p>
+            )}
+            {addressResults.length > 0 && (
+              <ul aria-label="Address search results" className="mt-2 max-h-36 divide-y divide-sand-200 overflow-y-auto rounded-lg border border-sand-200 bg-white">
+                {addressResults.map((result) => (
+                  <li key={result.id}>
+                    <button
+                      type="button"
+                      onClick={() => focusAddressResult(result)}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs text-marine-900 hover:bg-sand-50"
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-coral-600" />
+                      <span>{result.displayName}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-sand-200 text-xs">
@@ -352,6 +533,7 @@ export const RiskMap: React.FC = () => {
             <option value="verified">Verified Only</option>
             <option value="assigned">Assigned / In Progress</option>
             <option value="received">Received / Pending</option>
+            <option value="pending_sync">Pending Server Sync</option>
             <option value="queued_offline">Queued in Offline Outbox</option>
           </select>
 
@@ -388,6 +570,21 @@ export const RiskMap: React.FC = () => {
       {viewMode === 'map' ? (
         <div className="relative bg-sand-200 rounded-xl overflow-hidden shadow-md border border-sand-300 h-[560px]">
           <div id="pulso-map" ref={mapContainerRef} className="w-full h-full z-10" />
+
+          <div className="absolute top-3 left-3 z-20 max-w-xs rounded-lg border border-sand-300 bg-white/95 p-2.5 text-[11px] shadow-lg">
+            <div className="font-semibold text-marine-900">Satellite imagery is not live.</div>
+            <p className="mt-0.5 text-charcoal-600">
+              Imagery updates on the provider&apos;s schedule. Community markers show reports stored in this app and update when local data changes.
+            </p>
+            <a
+              href="https://goto.arcgisonline.com/maps/World_Imagery"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block font-semibold text-marine-800 underline"
+            >
+              Esri World Imagery details
+            </a>
+          </div>
 
           {/* Map Legend Floating Box */}
           <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-sm border border-sand-300 rounded-lg p-3 text-[11px] shadow-lg max-w-xs">
@@ -462,7 +659,7 @@ export const RiskMap: React.FC = () => {
                         className={`px-2 py-0.5 rounded font-semibold ${
                           rep.status === 'verified'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : rep.status === 'queued_offline'
+                            : rep.status === 'queued_offline' || rep.status === 'pending_sync'
                             ? 'bg-amber-100 text-amber-800'
                             : rep.status === 'assigned'
                             ? 'bg-sky-100 text-sky-800'

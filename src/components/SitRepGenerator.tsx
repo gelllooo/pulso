@@ -33,7 +33,7 @@ export const SitRepGenerator: React.FC = () => {
   );
 
   const verifiedReports = scopeReports.filter((r) => r.status === 'verified' || r.status === 'assigned' || r.status === 'resolved');
-  const unverifiedReports = scopeReports.filter((r) => r.status === 'received' || r.status === 'under_verification' || r.status === 'queued_offline');
+  const unverifiedReports = scopeReports.filter((r) => r.status === 'received' || r.status === 'under_verification' || r.status === 'queued_offline' || r.status === 'pending_sync');
 
   // Breakdown by category
   const categoryCounts = scopeReports.reduce((acc, r) => {
@@ -155,7 +155,7 @@ export const SitRepGenerator: React.FC = () => {
             1. Executive Summary & Synoptic Status
           </h3>
           <p className="text-xs leading-relaxed text-charcoal-800 mb-3">
-            PAGASA has placed Marinduque under <strong>Tropical Cyclone Wind Signal (TCWS) No. 2</strong>. Over the last 24 hours, local monitoring through the PULSO system logged a total of <strong>{scopeReports.length} community incident reports</strong> across monitored barangays. <strong>{verifiedReports.length}</strong> reports have undergone official human verification by designated Barangay and Municipal DRRM officers, while <strong>{unverifiedReports.length}</strong> remain in the verification pipeline.
+            No verified live PAGASA warning feed is connected to PULSO. Over the last 24 hours, local monitoring through the PULSO system logged a total of <strong>{scopeReports.length} community incident reports</strong> across monitored barangays. <strong>{verifiedReports.length}</strong> reports have undergone local human verification by designated Barangay and Municipal DRRM officers, while <strong>{unverifiedReports.length}</strong> remain in the verification pipeline.
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">

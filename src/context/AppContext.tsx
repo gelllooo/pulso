@@ -22,7 +22,6 @@ interface AppContextType {
   isNetworkOnline: boolean;
   isOffline: boolean;
   outboxCount: number;
-  isSyncing: boolean;
   syncNow: () => Promise<void>;
   reports: IncidentReport[];
   facilities: Facility[];
@@ -59,7 +58,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
   const [isNetworkOnline, setIsNetworkOnline] = useState(navigator.onLine);
   const [outboxCount, setOutboxCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [reports, setReports] = useState<IncidentReport[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [advisories, setAdvisories] = useState<OfficialAdvisory[]>([]);
@@ -105,26 +103,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setOutboxCount(pendingCount);
     } catch (err) {
       console.error('Failed to load from Dexie DB', err);
+      setActiveToast('Unable to load locally stored data. Please check this device’s storage.');
     }
   };
 
   useEffect(() => {
-    initializeDatabase().then(() => refreshData());
+    initializeDatabase()
+      .then(refreshData)
+      .catch((err) => {
+        console.error('Failed to initialize local database', err);
+        setActiveToast('Unable to initialize local storage. Reports cannot be saved on this device.');
+      });
   }, []);
-
-  // Automatic sync when connection returns
-  useEffect(() => {
-    if (!isOffline && outboxCount > 0) {
-      syncNow();
-    }
-  }, [isOffline, outboxCount]);
 
   const toggleSimulateOffline = () => {
     setIsSimulatedOffline((prev) => !prev);
     setActiveToast(
       !isSimulatedOffline
         ? 'Offline Mode Active — Reports will queue in local IndexedDB outbox'
-        : 'Online Mode Restored — Ready to sync queued reports'
+        : 'Online mode restored — reports remain on this device until a backend is configured'
     );
   };
 
@@ -148,62 +145,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const clearToast = () => setActiveToast(null);
 
-  // Sync Outbox
   const syncNow = async () => {
     if (isOffline) {
       setActiveToast('Cannot sync while offline. Please connect to network.');
       return;
     }
-    const pendingItems = await db.outbox.toArray();
-    if (pendingItems.length === 0) {
-      setActiveToast('All reports are already synchronized.');
+    if (outboxCount === 0) {
+      setActiveToast('There are no locally queued reports.');
       return;
     }
-
-    setIsSyncing(true);
-    setActiveToast(`Synchronizing ${pendingItems.length} queued report(s)...`);
-
-    // Simulate network transmission delay with idempotency protection
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-    for (const item of pendingItems) {
-      const updatedReport: IncidentReport = {
-        ...item,
-        status: item.status === 'queued_offline' ? 'received' : item.status,
-        syncedAt: nowStr,
-        lastUpdatedAt: nowStr
-      };
-
-      await db.reports.put(updatedReport);
-      await db.outbox.delete(item.id);
-
-      await db.auditEvents.add({
-        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
-        reportId: item.id,
-        actor: currentUser.name,
-        actorRole: currentUser.role,
-        action: 'Offline Sync Completed',
-        previousStatus: 'queued_offline',
-        newStatus: 'received',
-        timestamp: nowStr,
-        notes: `Synchronized from device IndexedDB (Idempotency Key: ${item.idempotencyKey})`
-      });
-
-      await db.syncLogs.add({
-        id: 'LOG-' + Math.random().toString(36).substring(2, 9),
-        clientReportId: item.clientReportId,
-        attemptNumber: 1,
-        status: 'success',
-        timestamp: nowStr,
-        message: `Synced report ${item.referenceNumber} successfully`
-      });
-    }
-
-    await refreshData();
-    setIsSyncing(false);
-    setActiveToast(`Successfully synced ${pendingItems.length} report(s) to central dashboard!`);
+    setActiveToast('Backend API is not configured. Reports remain saved on this device and have not been sent.');
   };
 
   // Submit Report
@@ -212,54 +163,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ): Promise<string> => {
     const randomHex = Math.floor(100 + Math.random() * 900);
     const refNum = `PULSO-2026-${data.municipality.toUpperCase()}-${randomHex}`;
-    const id = 'REP-' + Date.now().toString(36) + '-' + randomHex;
-    const clientReportId = 'client-uuid-' + Math.random().toString(36).substring(2, 10);
-    const idempotencyKey = 'idem-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const id = `REP-${crypto.randomUUID()}`;
+    const clientReportId = `client-${crypto.randomUUID()}`;
+    const idempotencyKey = `idem-${crypto.randomUUID()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-    const initialStatus: ReportStatus = isOffline ? 'queued_offline' : 'received';
 
     const newReport: IncidentReport = {
       ...data,
       id,
       clientReportId,
       referenceNumber: refNum,
-      status: initialStatus,
+      status: 'pending_sync',
       idempotencyKey,
-      syncedAt: isOffline ? undefined : nowStr,
+      syncedAt: undefined,
       lastUpdatedAt: nowStr
     };
 
-    if (isOffline) {
+    await db.transaction('rw', db.reports, db.outbox, db.auditEvents, async () => {
+      await db.reports.add(newReport);
       await db.outbox.add(newReport);
-      await db.reports.add(newReport);
       await db.auditEvents.add({
         id: 'AUD-' + Math.random().toString(36).substring(2, 9),
         reportId: id,
         actor: data.reporterName || 'Anonymous Reporter',
         actorRole: data.reporterRole,
-        action: 'Report Created Offline',
+        action: 'Report Saved Locally',
         previousStatus: 'draft',
-        newStatus: 'queued_offline',
+        newStatus: 'pending_sync',
         timestamp: nowStr,
-        notes: `Saved locally on device (IndexedDB). Awaiting network sync.`
+        notes: 'Saved in local IndexedDB outbox. No backend API is configured; the report has not been transmitted.'
       });
-      setActiveToast(`Report ${refNum} saved locally! It will automatically sync when connected.`);
-    } else {
-      await db.reports.add(newReport);
-      await db.auditEvents.add({
-        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
-        reportId: id,
-        actor: data.reporterName || 'Anonymous Reporter',
-        actorRole: data.reporterRole,
-        action: 'Report Submitted Online',
-        previousStatus: 'draft',
-        newStatus: 'received',
-        timestamp: nowStr,
-        notes: `Direct upload to central database. Reference: ${refNum}`
-      });
-      setActiveToast(`Report ${refNum} submitted and received by central system!`);
-    }
+    });
+    setActiveToast(`Report ${refNum} saved on this device. Backend delivery is not configured.`);
 
     await refreshData();
     return refNum;
@@ -366,7 +301,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isNetworkOnline,
         isOffline,
         outboxCount,
-        isSyncing,
         syncNow,
         reports,
         facilities,

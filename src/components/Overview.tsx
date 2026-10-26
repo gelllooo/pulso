@@ -71,8 +71,8 @@ export const Overview: React.FC = () => {
               Store Offline
             </span>
             <span>&rarr;</span>
-            <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40">
-              Synchronize
+            <span className="bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40">
+              Server Sync Not Configured
             </span>
             <span>&rarr;</span>
             <span className="bg-marine-700/70 px-2 py-0.5 rounded text-white">Verify</span>
@@ -100,13 +100,13 @@ export const Overview: React.FC = () => {
           </div>
           <div className="text-xs">
             <div className="text-[11px] font-bold text-coral-600 uppercase tracking-wider">
-              PAGASA Alert &bull; TCWS No. 2
+              Official Warning Sources
             </div>
             <div className="font-bold text-marine-900 text-sm mt-0.5">
-              Tropical Cyclone Advisory
+              Check current agency alerts
             </div>
             <p className="text-charcoal-600 text-[11px] mt-1 leading-snug">
-              62-88 km/h winds expected. Gale warning active for small seacraft in Marinduque waters.
+              PULSO does not have a verified live PAGASA warning feed. Check the official agency source.
             </p>
             <button
               onClick={() => setActiveTab('advisories')}
@@ -132,12 +132,10 @@ export const Overview: React.FC = () => {
               Offline-First Engine
             </div>
             <div className="font-bold text-marine-900 text-sm mt-0.5">
-              {isOffline ? 'Offline Mode Active' : 'Online & Synchronized'}
+              {isOffline ? 'Offline Mode Active' : 'Online; local-only storage'}
             </div>
             <p className="text-charcoal-600 text-[11px] mt-1 leading-snug">
-              {isOffline
-                ? `${outboxCount} report(s) waiting in device IndexedDB outbox. Automatic background sync enabled.`
-                : 'Connected to central data store. All local reports are up-to-date.'}
+              {`${outboxCount} report(s) waiting in device IndexedDB. No backend is configured, so reports have not been sent.`}
             </p>
             <button
               onClick={() => setActiveTab('report')}
@@ -316,7 +314,7 @@ export const Overview: React.FC = () => {
                       ? 'bg-emerald-100 text-emerald-800'
                       : r.status === 'assigned'
                       ? 'bg-sky-100 text-sky-800'
-                      : r.status === 'queued_offline'
+                      : r.status === 'queued_offline' || r.status === 'pending_sync'
                       ? 'bg-amber-100 text-amber-800'
                       : 'bg-sand-200 text-charcoal-700'
                   }`}

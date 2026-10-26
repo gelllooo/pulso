@@ -187,7 +187,7 @@ export const ReportForm: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-charcoal-500">Storage Status:</span>
                 <span className="font-semibold text-marine-800">
-                  {isOffline ? 'Queued in Offline Outbox (IndexedDB)' : 'Received by Central Server'}
+                  Saved locally — pending server delivery
                 </span>
               </div>
               <div className="flex justify-between">
@@ -201,9 +201,7 @@ export const ReportForm: React.FC = () => {
                 <span className="capitalize">{selectedCategoryMeta?.label}</span>
               </div>
               <p className="text-[11px] text-charcoal-500 pt-2 border-t border-sand-200">
-                {isOffline
-                  ? 'Your report is stored safely on this phone/computer and will automatically synchronize with local MDRRMO once internet or cellular data is restored.'
-                  : 'Your report is now visible to authorized barangay and municipal disaster coordinators for verification and response.'}
+                Your report is saved in this device’s IndexedDB outbox. It has not been sent to the MDRRMO because no backend connection is configured.
               </p>
             </div>
 

@@ -166,6 +166,7 @@ export const VerificationDashboard: React.FC = () => {
           <option value="verified">Verified</option>
           <option value="assigned">Assigned</option>
           <option value="resolved">Resolved</option>
+          <option value="pending_sync">Pending Server Sync</option>
           <option value="queued_offline">Offline Queue</option>
         </select>
 

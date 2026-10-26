@@ -25,7 +25,6 @@ export const Header: React.FC = () => {
     isSimulatedOffline,
     toggleSimulateOffline,
     outboxCount,
-    isSyncing,
     syncNow,
     crisisMode,
     setCrisisMode,
@@ -116,15 +115,15 @@ export const Header: React.FC = () => {
           {outboxCount > 0 && (
             <button
               onClick={syncNow}
-              disabled={isOffline || isSyncing}
+              disabled={isOffline}
               className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-md font-semibold transition-all ${
                 isOffline
                   ? 'bg-marine-800 text-sand-300 border border-marine-600 opacity-90 cursor-not-allowed'
                   : 'bg-coral-500 text-white hover:bg-coral-600 shadow-sm'
               }`}
-              title={isOffline ? 'Connect to network to synchronize outbox' : 'Click to sync now'}
+              title={isOffline ? 'Connect to network to attempt sync' : 'Backend is not configured; reports remain local'}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>
                 {outboxCount} Queued {outboxCount === 1 ? 'Report' : 'Reports'}
               </span>
