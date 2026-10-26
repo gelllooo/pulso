@@ -4,7 +4,7 @@ import { Header } from './components/Header';
 import { OfflineStatusBar } from './components/OfflineStatusBar';
 import { Overview } from './components/Overview';
 import { ReportForm } from './components/ReportForm';
-import { RiskMap } from './components/RiskMap';
+import { EnhancedRiskMap } from './components/EnhancedRiskMap';
 import { VerificationDashboard } from './components/VerificationDashboard';
 import { FacilityDirectory } from './components/FacilityDirectory';
 import { AdvisoryBoard } from './components/AdvisoryBoard';
@@ -23,7 +23,7 @@ const AppContent: React.FC = () => {
       <main className="flex-1">
         {activeTab === 'overview' && <Overview />}
         {activeTab === 'report' && <ReportForm />}
-        {activeTab === 'map' && <RiskMap />}
+        {activeTab === 'map' && <EnhancedRiskMap />}
         {activeTab === 'verify' && <VerificationDashboard />}
         {activeTab === 'facilities' && <FacilityDirectory />}
         {activeTab === 'advisories' && <AdvisoryBoard />}
