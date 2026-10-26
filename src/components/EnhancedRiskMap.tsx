@@ -30,7 +30,6 @@ export const EnhancedRiskMap: React.FC = () => {
   const reportLayer = useRef<L.LayerGroup | null>(null);
   const facilityLayer = useRef<L.LayerGroup | null>(null);
   const hazardLayer = useRef<L.LayerGroup | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   const filteredReports = useMemo(() => reports.filter((report) =>
     (selectedMunicipalityFilter === 'All' || report.municipality === selectedMunicipalityFilter) &&
@@ -58,7 +57,6 @@ export const EnhancedRiskMap: React.FC = () => {
     facilityLayer.current = L.layerGroup().addTo(map);
     hazardLayer.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    tileLayerRef.current = tiles;
 
     // Leaflet calculates dimensions before the surrounding layout settles in some tabs.
     const resize = window.setTimeout(() => map.invalidateSize(), 100);
@@ -69,7 +67,6 @@ export const EnhancedRiskMap: React.FC = () => {
       reportLayer.current = null;
       facilityLayer.current = null;
       hazardLayer.current = null;
-      tileLayerRef.current = null;
     };
   }, []);
 
