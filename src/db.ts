@@ -32,6 +32,83 @@ export class PulsoDatabase extends Dexie {
       auditEvents: 'id, reportId, actor, timestamp',
       syncLogs: 'id, clientReportId, status, timestamp'
     });
+    this.version(2).stores({
+      reports: 'id, clientReportId, referenceNumber, category, municipality, barangay, urgency, status, reportedTime',
+      outbox: 'id, clientReportId, referenceNumber, category, municipality, reportedTime',
+      drafts: 'id, category, municipality, reportedTime',
+      facilities: 'id, type, municipality, operatingStatus',
+      advisories: 'id, issuer, status, severity',
+      auditEvents: 'id, reportId, actor, timestamp',
+      syncLogs: 'id, clientReportId, status, timestamp'
+    }).upgrade(async (transaction) => {
+      const reports = transaction.table('reports');
+      const outbox = transaction.table('outbox');
+
+      for (const report of await outbox.toArray()) {
+        report.status = 'pending_sync';
+        await outbox.put(report);
+        await reports.put(report);
+      }
+
+      const previouslyMarkedSynced = await reports
+        .filter((report) => report.status === 'received' && Boolean(report.syncedAt) && !/^REP-\d+$/.test(report.id))
+        .toArray();
+
+      for (const report of previouslyMarkedSynced) {
+        report.status = 'pending_sync';
+        delete report.syncedAt;
+        await reports.put(report);
+        await outbox.put(report);
+      }
+    });
+    this.version(3).stores({
+      reports: 'id, clientReportId, referenceNumber, category, municipality, barangay, urgency, status, reportedTime',
+      outbox: 'id, clientReportId, referenceNumber, category, municipality, reportedTime',
+      drafts: 'id, category, municipality, reportedTime',
+      facilities: 'id, type, municipality, operatingStatus',
+      advisories: 'id, issuer, status, severity',
+      auditEvents: 'id, reportId, actor, timestamp',
+      syncLogs: 'id, clientReportId, status, timestamp'
+    }).upgrade(async (transaction) => {
+      await transaction.table('advisories').toCollection().modify((advisory) => {
+        if (advisory.id === 'ADV-PDRRMO-002') {
+          delete advisory.sourceUrl;
+        } else if (advisory.id === 'ADV-PHIVOLCS-003') {
+          advisory.sourceUrl = 'https://hazardhunter.georisk.gov.ph/';
+        }
+      });
+    });
+    this.version(4).stores({
+      reports: 'id, clientReportId, referenceNumber, category, municipality, barangay, urgency, status, reportedTime',
+      outbox: 'id, clientReportId, referenceNumber, category, municipality, reportedTime',
+      drafts: 'id, category, municipality, reportedTime',
+      facilities: 'id, type, municipality, operatingStatus',
+      advisories: 'id, issuer, status, severity',
+      auditEvents: 'id, reportId, actor, timestamp',
+      syncLogs: 'id, clientReportId, status, timestamp'
+    }).upgrade(async (transaction) => {
+      await transaction.table('advisories').where('issuer').equals('PAGASA').modify({
+        sourceUrl: 'https://pagasa.dost.gov.ph/'
+      });
+    });
+    this.version(5).stores({
+      reports: 'id, clientReportId, referenceNumber, category, municipality, barangay, urgency, status, reportedTime',
+      outbox: 'id, clientReportId, referenceNumber, category, municipality, reportedTime',
+      drafts: 'id, category, municipality, reportedTime',
+      facilities: 'id, type, municipality, operatingStatus',
+      advisories: 'id, issuer, status, severity',
+      auditEvents: 'id, reportId, actor, timestamp',
+      syncLogs: 'id, clientReportId, status, timestamp'
+    }).upgrade(async (transaction) => {
+      await transaction.table('advisories').toCollection().modify((advisory) => {
+        advisory.category =
+          advisory.issuer === 'PAGASA' ? 'weather' :
+          advisory.issuer === 'PDRRMO Marinduque' || advisory.issuer === 'MDRRMO' ? 'evacuation' :
+          'hazard';
+        advisory.verificationStatus = 'unverified';
+        delete advisory.lastRetrievedAt;
+      });
+    });
   }
 }
 

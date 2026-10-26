@@ -58,7 +58,6 @@ export const ReportForm: React.FC = () => {
   // Submitting state & Success Modal
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
 
   // Filter barangays for selected municipality
   const availableBarangays = BARANGAYS.filter((b) => b.municipality === municipality);
@@ -108,13 +107,12 @@ export const ReportForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
     if (!description.trim()) {
-      setFormError('Add a short description of what you observed.');
+      alert('Please provide a short description of what you observed.');
       return;
     }
     if (!consentGiven) {
-      setFormError('Accept the privacy notice before sending.');
+      alert('Please accept the privacy and data processing notice.');
       return;
     }
 
@@ -158,7 +156,7 @@ export const ReportForm: React.FC = () => {
       setSubmittedRef(refNumber);
     } catch (err) {
       console.error(err);
-      setFormError('The report could not be saved. Try again.');
+      alert('Failed to save report. Please check storage permissions.');
     } finally {
       setIsSubmitting(false);
     }
@@ -176,10 +174,10 @@ export const ReportForm: React.FC = () => {
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className="font-display font-bold text-xl text-marine-900 mb-1">
-              Report saved
+              Report Successfully Recorded!
             </h3>
             <p className="text-xs text-charcoal-600 mb-4">
-              Reference:{' '}
+              Reference Number:{' '}
               <span className="font-mono font-bold text-coral-600 bg-sand-100 px-2 py-0.5 rounded">
                 {submittedRef}
               </span>
@@ -189,7 +187,7 @@ export const ReportForm: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-charcoal-500">Storage Status:</span>
                 <span className="font-semibold text-marine-800">
-                  {isOffline ? 'Waiting to send' : 'Saved'}
+                  Saved locally — pending server delivery
                 </span>
               </div>
               <div className="flex justify-between">
@@ -203,9 +201,7 @@ export const ReportForm: React.FC = () => {
                 <span className="capitalize">{selectedCategoryMeta?.label}</span>
               </div>
               <p className="text-[11px] text-charcoal-500 pt-2 border-t border-sand-200">
-                {isOffline
-                  ? 'It will be sent when you are connected.'
-                  : 'Your report is ready for review.'}
+                Your report is saved in this device’s IndexedDB outbox. It has not been sent to the MDRRMO because no backend connection is configured.
               </p>
             </div>
 
@@ -252,18 +248,13 @@ export const ReportForm: React.FC = () => {
           <div className="mt-3 bg-amber-50 border border-amber-300 text-amber-900 px-3 py-2 rounded-lg text-xs flex items-center space-x-2">
             <Info className="w-4 h-4 text-amber-700 shrink-0" />
             <span>
-              <strong>You are offline.</strong> This report will be saved on this device and sent when connected.
+              <strong>Offline Mode Active:</strong> You do not need an active internet connection. This report will be saved to your device and queued for automatic sync.
             </span>
           </div>
         )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md border border-sand-200 p-5 sm:p-7 space-y-6">
-        {formError && (
-          <div role="alert" className="bg-coral-50 border border-coral-200 text-coral-700 px-3 py-2 rounded-lg text-xs">
-            {formError}
-          </div>
-        )}
         {/* 1. Category Selection */}
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-marine-900 mb-2">
@@ -539,7 +530,7 @@ export const ReportForm: React.FC = () => {
               </div>
             )}
             <span className="text-[11px] text-charcoal-500">
-              {photoPreview ? 'Photo attached' : 'Add a photo if helpful.'}
+              {photoPreview ? 'Photo attached' : 'Photos are stored locally in IndexedDB if offline.'}
             </span>
           </div>
         </div>

@@ -77,6 +77,7 @@ export type UrgencyLevel = 'routine' | 'elevated' | 'urgent' | 'immediate_danger
 
 export type ReportStatus =
   | 'draft'
+  | 'pending_sync'
   | 'queued_offline'
   | 'received'
   | 'under_verification'
@@ -183,9 +184,12 @@ export interface OfficialAdvisory {
   id: string;
   issuer: 'PAGASA' | 'PHIVOLCS' | 'NDRRMC' | 'PDRRMO Marinduque' | 'MDRRMO';
   title: string;
-  sourceUrl: string;
+  category: 'weather' | 'evacuation' | 'hazard';
+  sourceUrl?: string;
   issuanceTime: string;
-  validityPeriod: string;
+  validityPeriod?: string;
+  lastRetrievedAt?: string;
+  verificationStatus: 'current' | 'expired' | 'unverified';
   scope: string;
   content: string;
   status: 'active' | 'superseded' | 'cancelled';

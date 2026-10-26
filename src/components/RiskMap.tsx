@@ -14,68 +14,18 @@ import {
   HeartPulse,
   Anchor,
   Eye,
-  Info
+  Info,
+  Search,
+  MapPin
 } from 'lucide-react';
 import L from 'leaflet';
-import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 
-type Coordinate = [number, number];
-type ProvincePolygon = Coordinate[][];
-
-interface ProvinceBoundary {
-  type: 'FeatureCollection';
-  features: Array<{
-    type: 'Feature';
-    geometry: {
-      type: 'Polygon' | 'MultiPolygon';
-      coordinates: ProvincePolygon | ProvincePolygon[];
-    };
-  }>;
+interface AddressSearchResult {
+  id: string;
+  lat: number;
+  lon: number;
+  displayName: string;
 }
-
-const isPointInRing = ([longitude, latitude]: Coordinate, ring: Coordinate[]): boolean => {
-  let inside = false;
-
-  for (let index = 0, previousIndex = ring.length - 1; index < ring.length; previousIndex = index++) {
-    const [currentLongitude, currentLatitude] = ring[index];
-    const [previousLongitude, previousLatitude] = ring[previousIndex];
-    const intersects =
-      currentLatitude > latitude !== previousLatitude > latitude &&
-      longitude <
-        ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
-          (previousLatitude - currentLatitude) +
-          currentLongitude;
-
-    if (intersects) inside = !inside;
-  }
-
-  return inside;
-};
-
-const isPointInPolygon = ([longitude, latitude]: Coordinate, polygon: ProvincePolygon): boolean => {
-  const [outerRing, ...holes] = polygon;
-  return (
-    isPointInRing([longitude, latitude], outerRing) &&
-    !holes.some((hole) => isPointInRing([longitude, latitude], hole))
-  );
-};
-
-const isPointInProvince = ([longitude, latitude]: Coordinate, boundary: ProvinceBoundary): boolean =>
-  boundary.features.some((feature) => {
-    if (feature.geometry.type === 'Polygon') {
-      return isPointInPolygon([longitude, latitude], feature.geometry.coordinates as ProvincePolygon);
-    }
-
-    return (feature.geometry.coordinates as ProvincePolygon[]).some((polygon) =>
-      isPointInPolygon([longitude, latitude], polygon)
-    );
-  });
-
-const loadGoogleMaps = async (apiKey: string): Promise<typeof google.maps> => {
-  setOptions({ key: apiKey, v: 'weekly' });
-  await importLibrary('maps');
-  return google.maps;
-};
 
 export const RiskMap: React.FC = () => {
   const { reports, facilities, selectedMunicipalityFilter, setSelectedMunicipalityFilter, setActiveTab } = useApp();
@@ -86,28 +36,21 @@ export const RiskMap: React.FC = () => {
   const [showFacilities, setShowFacilities] = useState(true);
   const [showHazardReference, setShowHazardReference] = useState(true);
   const [activeReportModal, setActiveReportModal] = useState<IncidentReport | null>(null);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [addressSearchError, setAddressSearchError] = useState<string | null>(null);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const facilitiesLayerRef = useRef<L.LayerGroup | null>(null);
   const hazardLayerRef = useRef<L.LayerGroup | null>(null);
-  const provinceBoundaryRef = useRef<ProvinceBoundary | null>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const googleOverlaysRef = useRef<Array<google.maps.Marker | google.maps.Polygon>>([]);
-  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const [boundaryLoaded, setBoundaryLoaded] = useState(false);
+  const addressMarkerLayerRef = useRef<L.LayerGroup | null>(null);
+  const addressSearchRef = useRef<AbortController | null>(null);
 
   // Filtered reports
   const filteredReports = reports.filter((r) => {
-    if (boundaryLoaded && !provinceBoundaryRef.current) return false;
-    if (
-      boundaryLoaded &&
-      provinceBoundaryRef.current &&
-      !isPointInProvince([r.lng, r.lat], provinceBoundaryRef.current)
-    ) {
-      return false;
-    }
     if (selectedMunicipalityFilter !== 'All' && r.municipality !== selectedMunicipalityFilter) {
       return false;
     }
@@ -122,14 +65,6 @@ export const RiskMap: React.FC = () => {
 
   // Filtered facilities
   const filteredFacilities = facilities.filter((f) => {
-    if (boundaryLoaded && !provinceBoundaryRef.current) return false;
-    if (
-      boundaryLoaded &&
-      provinceBoundaryRef.current &&
-      !isPointInProvince([f.lng, f.lat], provinceBoundaryRef.current)
-    ) {
-      return false;
-    }
     if (selectedMunicipalityFilter !== 'All' && f.municipality !== selectedMunicipalityFilter) {
       return false;
     }
@@ -139,268 +74,66 @@ export const RiskMap: React.FC = () => {
   // Initialize Map
   useEffect(() => {
     if (viewMode !== 'map' || !mapContainerRef.current) return;
-    if (googleMapsKey) return;
 
     if (!mapInstanceRef.current) {
       // Marinduque center coordinates
       const map = L.map(mapContainerRef.current, {
         center: [13.41, 121.90],
-        zoom: 12,
+        zoom: 11,
         minZoom: 10,
-        maxZoom: 17,
-        maxBoundsViscosity: 1
+        maxZoom: 17
       });
-      map.createPane('province-mask');
-      map.getPane('province-mask')!.style.zIndex = '300';
 
-      // Standard OpenStreetMap base tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | PULSO Marinduque',
+      const satelliteLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: 'Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community',
+          maxZoom: 19
+        }
+      );
+      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
-      }).addTo(map);
+      });
+      satelliteLayer.addTo(map);
+      L.control.layers(
+        { Satellite: satelliteLayer, Streets: streetLayer },
+        undefined,
+        { position: 'topright', collapsed: false }
+      ).addTo(map);
 
       // Create Layer Groups
       const markersLayer = L.layerGroup().addTo(map);
       const facilitiesLayer = L.layerGroup().addTo(map);
       const hazardLayer = L.layerGroup().addTo(map);
+      const addressMarkerLayer = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
       facilitiesLayerRef.current = facilitiesLayer;
       hazardLayerRef.current = hazardLayer;
-
-      fetch('/geojson/marinduque-province.geojson')
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`Boundary request failed with status ${response.status}`);
-          }
-          return response.json() as Promise<ProvinceBoundary>;
-        })
-        .then((boundary) => {
-          provinceBoundaryRef.current = boundary;
-
-          // Use the boundary for bounds and filtering, but do not draw municipal
-          // outlines. The mask hides all map tiles outside Marinduque.
-          const boundaryBounds = L.geoJSON(boundary as Parameters<typeof L.geoJSON>[0]).getBounds();
-          const provinceHoles: L.LatLngExpression[][] = [];
-
-          boundary.features.forEach((feature) => {
-            const polygons =
-              feature.geometry.type === 'Polygon'
-                ? [feature.geometry.coordinates as ProvincePolygon]
-                : (feature.geometry.coordinates as ProvincePolygon[]);
-
-            polygons.forEach(([outerRing]) => {
-              provinceHoles.push(outerRing.map(([longitude, latitude]) => [latitude, longitude]));
-            });
-          });
-
-          L.polygon(
-            [
-              [
-                [-90, -180],
-                [-90, 180],
-                [90, 180],
-                [90, -180]
-              ],
-              ...provinceHoles
-            ],
-            {
-              pane: 'province-mask',
-              stroke: false,
-              fillColor: '#c4bcae',
-              fillOpacity: 1,
-              interactive: false
-            }
-          ).addTo(map);
-
-          map.setMaxBounds(boundaryBounds);
-          map.fitBounds(boundaryBounds, { padding: [8, 8], maxZoom: 12 });
-          setBoundaryLoaded(true);
-        })
-        .catch((error: unknown) => {
-          console.error('Failed to load Marinduque province boundary', error);
-          setBoundaryLoaded(true);
-        });
+      addressMarkerLayerRef.current = addressMarkerLayer;
     }
 
     return () => {
-      // Don't necessarily destroy on re-render, keep instance
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+      markersLayerRef.current = null;
+      facilitiesLayerRef.current = null;
+      hazardLayerRef.current = null;
+      addressMarkerLayerRef.current = null;
     };
   }, [viewMode]);
 
-  // Google Maps provides satellite imagery, street labels, and 3D tilt when configured.
   useEffect(() => {
-    if (viewMode !== 'map' || !mapContainerRef.current || !googleMapsKey) return;
-
-    let cancelled = false;
-    loadGoogleMaps(googleMapsKey)
-      .then((maps) => {
-        if (cancelled || googleMapRef.current || !mapContainerRef.current) return;
-
-        const map = new maps.Map(mapContainerRef.current, {
-          center: { lat: 13.41, lng: 121.90 },
-          zoom: 12,
-          minZoom: 10,
-          maxZoom: 19,
-          mapTypeId: 'hybrid',
-          tilt: 45,
-          heading: 0,
-          streetViewControl: false,
-          fullscreenControl: true,
-          mapTypeControl: true,
-          mapTypeControlOptions: {
-            mapTypeIds: ['roadmap', 'satellite', 'hybrid']
-          }
-        });
-
-        googleMapRef.current = map;
-
-        return fetch('/geojson/marinduque-province.geojson')
-          .then((response) => {
-            if (!response.ok) throw new Error(`Boundary request failed with status ${response.status}`);
-            return response.json() as Promise<ProvinceBoundary>;
-          })
-          .then((boundary) => {
-            if (cancelled) return;
-            provinceBoundaryRef.current = boundary;
-            const boundaryLayer = new maps.Polygon({
-              paths: boundary.features.flatMap((feature) => {
-                const polygons =
-                  feature.geometry.type === 'Polygon'
-                    ? [feature.geometry.coordinates as ProvincePolygon]
-                    : (feature.geometry.coordinates as ProvincePolygon[]);
-                return polygons.map(([outerRing]) =>
-                  outerRing.map(([lng, lat]) => ({ lat, lng }))
-                );
-              }),
-              strokeOpacity: 0,
-              fillOpacity: 0,
-              clickable: false,
-              map
-            });
-            const bounds = new maps.LatLngBounds();
-            boundary.features.forEach((feature) => {
-              const polygons =
-                feature.geometry.type === 'Polygon'
-                  ? [feature.geometry.coordinates as ProvincePolygon]
-                  : (feature.geometry.coordinates as ProvincePolygon[]);
-              polygons.forEach(([outerRing]) =>
-                outerRing.forEach(([lng, lat]) => bounds.extend({ lat, lng }))
-              );
-            });
-            map.fitBounds(bounds, 8);
-            map.setOptions({ restriction: { latLngBounds: bounds, strictBounds: true } });
-            googleOverlaysRef.current.push(boundaryLayer);
-            setBoundaryLoaded(true);
-          });
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to load Google Maps', error);
-        setBoundaryLoaded(true);
-      });
-
-    return () => {
-      cancelled = true;
-      googleOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
-      googleOverlaysRef.current = [];
-      googleMapRef.current = null;
-    };
-  }, [viewMode, googleMapsKey]);
-
-  useEffect(() => {
-    if (viewMode !== 'map' || !googleMapsKey || !googleMapRef.current || !boundaryLoaded) return;
-
-    googleOverlaysRef.current
-      .filter((overlay) => overlay instanceof google.maps.Marker || overlay instanceof google.maps.Polygon)
-      .forEach((overlay) => overlay.setMap(null));
-    googleOverlaysRef.current = googleOverlaysRef.current.filter(
-      (overlay) => overlay instanceof google.maps.Polygon && overlay.get('clickable') === false
-    );
-
-    const map = googleMapRef.current;
-    const infoWindow = new google.maps.InfoWindow();
-
-    filteredReports.forEach((report) => {
-      const marker = new google.maps.Marker({
-        position: { lat: report.lat, lng: report.lng },
-        map,
-        title: report.referenceNumber,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          fillColor: report.urgency === 'immediate_danger' || report.urgency === 'urgent' ? '#e05338' : '#16385a',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-          scale: 8
-        }
-      });
-      marker.addListener('click', () => {
-        infoWindow.setContent(
-          `<strong>${report.category.replace(/_/g, ' ').toUpperCase()}</strong><br>${report.barangay}, ${report.municipality}<br>${report.description}`
-        );
-        infoWindow.open({ map, anchor: marker });
-        setActiveReportModal(report);
-      });
-      googleOverlaysRef.current.push(marker);
-    });
-
-    if (showFacilities) {
-      filteredFacilities.forEach((facility) => {
-        const marker = new google.maps.Marker({
-          position: { lat: facility.lat, lng: facility.lng },
-          map,
-          title: facility.name,
-          icon: {
-            path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-            fillColor: '#0284c7',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-            scale: 6
-          }
-        });
-        marker.addListener('click', () => {
-          infoWindow.setContent(`<strong>${facility.name}</strong><br>${facility.barangay}, ${facility.municipality}`);
-          infoWindow.open({ map, anchor: marker });
-        });
-        googleOverlaysRef.current.push(marker);
-      });
-    }
-
-    if (showHazardReference) {
-      const floodPolygon = new google.maps.Polygon({
-        paths: [
-          { lat: 13.465, lng: 121.848 },
-          { lat: 13.452, lng: 121.844 },
-          { lat: 13.442, lng: 121.838 },
-          { lat: 13.435, lng: 121.821 },
-          { lat: 13.438, lng: 121.815 },
-          { lat: 13.448, lng: 121.832 },
-          { lat: 13.468, lng: 121.842 }
-        ],
-        strokeColor: '#0284c7',
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: '#0284c7',
-        fillOpacity: 0.18,
-        map
-      });
-      googleOverlaysRef.current.push(floodPolygon);
-    }
-  }, [
-    viewMode,
-    googleMapsKey,
-    boundaryLoaded,
-    filteredReports,
-    filteredFacilities,
-    showFacilities,
-    showHazardReference
-  ]);
+    if (viewMode !== 'map' || !mapInstanceRef.current) return;
+    const timeoutId = window.setTimeout(() => mapInstanceRef.current?.invalidateSize(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [viewMode]);
 
   // Update Map Markers when data or filters change
   useEffect(() => {
-    if (viewMode !== 'map' || googleMapsKey || !mapInstanceRef.current) return;
+    if (viewMode !== 'map' || !mapInstanceRef.current) return;
 
     // 1. Reports Markers
     if (markersLayerRef.current) {
@@ -413,8 +146,8 @@ export const RiskMap: React.FC = () => {
         const statusBadge =
           rep.status === 'verified'
             ? '✓ Verified'
-            : rep.status === 'queued_offline'
-            ? '⏳ Offline Queue'
+            : rep.status === 'queued_offline' || rep.status === 'pending_sync'
+            ? '⏳ Pending Sync'
             : rep.status === 'assigned'
             ? '⚡ Assigned'
             : '● Received';
@@ -570,7 +303,97 @@ export const RiskMap: React.FC = () => {
         hazardLayerRef.current.addLayer(surgePoly);
       }
     }
-  }, [viewMode, filteredReports, filteredFacilities, showFacilities, showHazardReference, boundaryLoaded]);
+  }, [viewMode, filteredReports, filteredFacilities, showFacilities, showHazardReference]);
+
+  const searchAddress = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = addressQuery.trim();
+    if (query.length < 3 || query.length > 120) {
+      setAddressSearchError('Enter a place or address between 3 and 120 characters.');
+      setAddressResults([]);
+      return;
+    }
+
+    addressSearchRef.current?.abort();
+    const controller = new AbortController();
+    addressSearchRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+    setIsSearchingAddress(true);
+    setAddressSearchError(null);
+    setAddressResults([]);
+
+    try {
+      const response = await fetch(`/api/map/search?q=${encodeURIComponent(query)}`, {
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) {
+        const message = payload && typeof payload === 'object' && 'error' in payload &&
+          typeof payload.error === 'string'
+          ? payload.error
+          : `Address search failed (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      if (!payload || typeof payload !== 'object' || !('results' in payload) || !Array.isArray(payload.results)) {
+        throw new Error('Address search returned an unexpected response.');
+      }
+
+      const results = payload.results.flatMap((item): AddressSearchResult[] => {
+        if (!item || typeof item !== 'object') return [];
+        const result = item as Record<string, unknown>;
+        if (
+          typeof result.id !== 'string' ||
+          typeof result.displayName !== 'string' ||
+          typeof result.lat !== 'number' ||
+          typeof result.lon !== 'number' ||
+          !Number.isFinite(result.lat) ||
+          !Number.isFinite(result.lon)
+        ) return [];
+        return [{
+          id: result.id,
+          displayName: result.displayName,
+          lat: result.lat,
+          lon: result.lon
+        }];
+      });
+      setAddressResults(results);
+      if (results.length === 0) {
+        setAddressSearchError('No matching places were found in Marinduque.');
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setAddressSearchError(error instanceof Error ? error.message : 'Unable to search for that address.');
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (addressSearchRef.current === controller) {
+        addressSearchRef.current = null;
+        setIsSearchingAddress(false);
+      }
+    }
+  };
+
+  const focusAddressResult = (result: AddressSearchResult) => {
+    const map = mapInstanceRef.current;
+    const layer = addressMarkerLayerRef.current;
+    if (!map || !layer) return;
+
+    layer.clearLayers();
+    const marker = L.marker([result.lat, result.lon], {
+      icon: L.divIcon({
+        className: 'address-search-pin',
+        html: '<div style="background:#e05338;width:28px;height:28px;border-radius:50% 50% 50% 0;border:2px solid white;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28]
+      })
+    });
+    const popup = document.createElement('div');
+    popup.textContent = result.displayName;
+    marker.bindPopup(popup).addTo(layer);
+    map.setView([result.lat, result.lon], Math.max(map.getZoom(), 15));
+    marker.openPopup();
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
@@ -613,6 +436,57 @@ export const RiskMap: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {viewMode === 'map' && (
+          <div className="mb-3 border-t border-sand-200 pt-3">
+            <form onSubmit={(event) => void searchAddress(event)} className="flex flex-wrap gap-2">
+              <label htmlFor="map-address-search" className="sr-only">Search a Marinduque address or place</label>
+              <input
+                id="map-address-search"
+                type="search"
+                value={addressQuery}
+                onChange={(event) => setAddressQuery(event.target.value)}
+                maxLength={120}
+                placeholder="Search an address or place in Marinduque"
+                className="min-w-0 flex-1 rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm text-charcoal-900 placeholder:text-charcoal-500 focus:outline-none focus:ring-2 focus:ring-marine-700"
+              />
+              <button
+                type="submit"
+                disabled={isSearchingAddress}
+                className="inline-flex items-center gap-2 rounded-lg bg-marine-900 px-4 py-2 text-sm font-semibold text-white hover:bg-marine-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Search className="h-4 w-4" />
+                {isSearchingAddress ? 'Searching…' : 'Search map'}
+              </button>
+            </form>
+            <p className="mt-1.5 text-[11px] text-charcoal-600">
+              One search per submission; results are limited to Marinduque. Search terms are sent to{' '}
+              <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer" className="underline">
+                OpenStreetMap Nominatim
+              </a>
+              . Don&apos;t enter private or sensitive information.
+            </p>
+            {addressSearchError && (
+              <p role="alert" className="mt-2 text-xs font-medium text-coral-700">{addressSearchError}</p>
+            )}
+            {addressResults.length > 0 && (
+              <ul aria-label="Address search results" className="mt-2 max-h-36 divide-y divide-sand-200 overflow-y-auto rounded-lg border border-sand-200 bg-white">
+                {addressResults.map((result) => (
+                  <li key={result.id}>
+                    <button
+                      type="button"
+                      onClick={() => focusAddressResult(result)}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs text-marine-900 hover:bg-sand-50"
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-coral-600" />
+                      <span>{result.displayName}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-sand-200 text-xs">
@@ -659,6 +533,7 @@ export const RiskMap: React.FC = () => {
             <option value="verified">Verified Only</option>
             <option value="assigned">Assigned / In Progress</option>
             <option value="received">Received / Pending</option>
+            <option value="pending_sync">Pending Server Sync</option>
             <option value="queued_offline">Queued in Offline Outbox</option>
           </select>
 
@@ -695,19 +570,21 @@ export const RiskMap: React.FC = () => {
       {viewMode === 'map' ? (
         <div className="relative bg-sand-200 rounded-xl overflow-hidden shadow-md border border-sand-300 h-[560px]">
           <div id="pulso-map" ref={mapContainerRef} className="w-full h-full z-10" />
-          {googleMapsKey && (
-            <div className="absolute top-3 right-3 z-20 rounded-md bg-marine-950/90 px-3 py-1.5 text-[11px] font-semibold text-white shadow">
-              Google Maps Hybrid 3D
-            </div>
-          )}
-          {!googleMapsKey && (
-            <div className="absolute top-3 right-3 z-20 max-w-[260px] rounded-md bg-amber-50/95 px-3 py-2 text-[11px] text-amber-900 shadow ring-1 ring-amber-200">
-              <strong>Google Maps is not configured.</strong>
-              <span className="block mt-0.5">
-                Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to <code>.env.local</code>, then restart the app.
-              </span>
-            </div>
-          )}
+
+          <div className="absolute top-3 left-3 z-20 max-w-xs rounded-lg border border-sand-300 bg-white/95 p-2.5 text-[11px] shadow-lg">
+            <div className="font-semibold text-marine-900">Satellite imagery is not live.</div>
+            <p className="mt-0.5 text-charcoal-600">
+              Imagery updates on the provider&apos;s schedule. Community markers show reports stored in this app and update when local data changes.
+            </p>
+            <a
+              href="https://goto.arcgisonline.com/maps/World_Imagery"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block font-semibold text-marine-800 underline"
+            >
+              Esri World Imagery details
+            </a>
+          </div>
 
           {/* Map Legend Floating Box */}
           <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-sm border border-sand-300 rounded-lg p-3 text-[11px] shadow-lg max-w-xs">
@@ -782,7 +659,7 @@ export const RiskMap: React.FC = () => {
                         className={`px-2 py-0.5 rounded font-semibold ${
                           rep.status === 'verified'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : rep.status === 'queued_offline'
+                            : rep.status === 'queued_offline' || rep.status === 'pending_sync'
                             ? 'bg-amber-100 text-amber-800'
                             : rep.status === 'assigned'
                             ? 'bg-sky-100 text-sky-800'

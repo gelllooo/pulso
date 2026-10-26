@@ -23,7 +23,6 @@ interface AppContextType {
   isNetworkOnline: boolean;
   isOffline: boolean;
   outboxCount: number;
-  isSyncing: boolean;
   isLoading: boolean;
   loadError: string | null;
   syncNow: () => Promise<void>;
@@ -47,11 +46,12 @@ interface AppContextType {
 
 const DEFAULT_USER: UserProfile = {
   id: 'USR-001',
-  name: 'Demo User',
+  name: 'Maria Elena Reyes',
   role: 'barangay_official',
   scopeMunicipality: 'Boac',
   scopeBarangay: 'Cawit',
-  agencyOrOffice: 'Demo workspace'
+  contactNumber: '0917-888-2345',
+  agencyOrOffice: 'BDRRMC Cawit'
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -61,7 +61,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
   const [isNetworkOnline, setIsNetworkOnline] = useState(navigator.onLine);
   const [outboxCount, setOutboxCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reports, setReports] = useState<IncidentReport[]>([]);
@@ -110,6 +109,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (err) {
       console.error('Failed to load from Dexie DB', err);
       setLoadError('Saved data could not be loaded. Try again.');
+      setActiveToast('Unable to load locally stored data. Please check this device’s storage.');
     } finally {
       setIsLoading(false);
     }
@@ -119,25 +119,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     initializeDatabase()
       .then(refreshData)
       .catch((err) => {
-        console.error('Failed to initialize Dexie DB', err);
+        console.error('Failed to initialize local database', err);
         setLoadError('Saved data could not be loaded. Try again.');
         setIsLoading(false);
+        setActiveToast('Unable to initialize local storage. Reports cannot be saved on this device.');
       });
   }, []);
-
-  // Automatic sync when connection returns
-  useEffect(() => {
-    if (!isOffline && outboxCount > 0) {
-      syncNow();
-    }
-  }, [isOffline, outboxCount]);
 
   const toggleSimulateOffline = () => {
     setIsSimulatedOffline((prev) => !prev);
     setActiveToast(
       !isSimulatedOffline
-        ? 'Offline mode on. Reports will wait on this device.'
-        : 'Online mode restored. Waiting reports can be sent.'
+        ? 'Offline Mode Active — Reports will queue in local IndexedDB outbox'
+        : 'Online mode restored — reports remain on this device until a backend is configured'
     );
   };
 
@@ -161,67 +155,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const clearToast = () => setActiveToast(null);
 
-  // Sync Outbox
   const syncNow = async () => {
     if (isOffline) {
       setActiveToast('Cannot sync while offline. Please connect to network.');
       return;
     }
-    setIsSyncing(true);
-    try {
-      const pendingItems = await db.outbox.toArray();
-      if (pendingItems.length === 0) {
-        setActiveToast('Nothing is waiting to send.');
-        return;
-      }
-
-      setActiveToast(`Sending ${pendingItems.length} report(s)...`);
-
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-      for (const item of pendingItems) {
-        const updatedReport: IncidentReport = {
-          ...item,
-          status: item.status === 'queued_offline' ? 'received' : item.status,
-          syncedAt: nowStr,
-          lastUpdatedAt: nowStr
-        };
-
-        await db.reports.put(updatedReport);
-        await db.outbox.delete(item.id);
-
-        await db.auditEvents.add({
-          id: `AUD-${crypto.randomUUID()}`,
-          reportId: item.id,
-          actor: currentUser.name,
-          actorRole: currentUser.role,
-          action: 'Report Sent',
-          previousStatus: 'queued_offline',
-          newStatus: 'received',
-          timestamp: nowStr,
-          notes: 'Sent from this device.'
-        });
-
-        await db.syncLogs.add({
-          id: `LOG-${crypto.randomUUID()}`,
-          clientReportId: item.clientReportId,
-          attemptNumber: 1,
-          status: 'success',
-          timestamp: nowStr,
-          message: `Sent report ${item.referenceNumber}`
-        });
-      }
-
-      await refreshData();
-      setActiveToast(`${pendingItems.length} report(s) sent.`);
-    } catch (err) {
-      console.error('Failed to send queued reports', err);
-      setActiveToast('Some reports could not be sent. Try again.');
-    } finally {
-      setIsSyncing(false);
+    if (outboxCount === 0) {
+      setActiveToast('There are no locally queued reports.');
+      return;
     }
+    setActiveToast('Backend API is not configured. Reports remain saved on this device and have not been sent.');
   };
 
   // Submit Report
@@ -230,54 +173,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ): Promise<string> => {
     const randomHex = Math.floor(100 + Math.random() * 900);
     const refNum = `PULSO-2026-${data.municipality.toUpperCase()}-${randomHex}`;
-    const id = 'REP-' + Date.now().toString(36) + '-' + randomHex;
+    const id = `REP-${crypto.randomUUID()}`;
     const clientReportId = `client-${crypto.randomUUID()}`;
     const idempotencyKey = `idem-${crypto.randomUUID()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-    const initialStatus: ReportStatus = isOffline ? 'queued_offline' : 'received';
 
     const newReport: IncidentReport = {
       ...data,
       id,
       clientReportId,
       referenceNumber: refNum,
-      status: initialStatus,
+      status: 'pending_sync',
       idempotencyKey,
-      syncedAt: isOffline ? undefined : nowStr,
+      syncedAt: undefined,
       lastUpdatedAt: nowStr
     };
 
-    if (isOffline) {
+    await db.transaction('rw', db.reports, db.outbox, db.auditEvents, async () => {
+      await db.reports.add(newReport);
       await db.outbox.add(newReport);
-      await db.reports.add(newReport);
       await db.auditEvents.add({
-        id: `AUD-${crypto.randomUUID()}`,
+        id: 'AUD-' + Math.random().toString(36).substring(2, 9),
         reportId: id,
         actor: data.reporterName || 'Anonymous Reporter',
         actorRole: data.reporterRole,
-        action: 'Report Created Offline',
+        action: 'Report Saved Locally',
         previousStatus: 'draft',
-        newStatus: 'queued_offline',
+        newStatus: 'pending_sync',
         timestamp: nowStr,
-        notes: 'Saved on this device. Waiting for a connection.'
+        notes: 'Saved in local IndexedDB outbox. No backend API is configured; the report has not been transmitted.'
       });
-      setActiveToast(`Report ${refNum} saved locally! It will automatically sync when connected.`);
-    } else {
-      await db.reports.add(newReport);
-      await db.auditEvents.add({
-        id: `AUD-${crypto.randomUUID()}`,
-        reportId: id,
-        actor: data.reporterName || 'Anonymous Reporter',
-        actorRole: data.reporterRole,
-        action: 'Report Submitted Online',
-        previousStatus: 'draft',
-        newStatus: 'received',
-        timestamp: nowStr,
-        notes: `Saved while connected. Reference: ${refNum}`
-      });
-      setActiveToast(`Report ${refNum} submitted and received by central system!`);
-    }
+    });
+    setActiveToast(`Report ${refNum} saved on this device. Backend delivery is not configured.`);
 
     await refreshData();
     return refNum;
@@ -300,7 +227,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: `AUD-${crypto.randomUUID()}`,
+      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
       reportId,
       actor: verData.verifierName,
       actorRole: verData.verifierRole,
@@ -330,7 +257,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: `AUD-${crypto.randomUUID()}`,
+      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
       reportId,
       actor: currentUser.name,
       actorRole: currentUser.role,
@@ -359,7 +286,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     await db.reports.put(updated);
     await db.auditEvents.add({
-      id: `AUD-${crypto.randomUUID()}`,
+      id: 'AUD-' + Math.random().toString(36).substring(2, 9),
       reportId,
       actor: currentUser.name,
       actorRole: currentUser.role,
@@ -384,7 +311,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isNetworkOnline,
         isOffline,
         outboxCount,
-        isSyncing,
         isLoading,
         loadError,
         syncNow,

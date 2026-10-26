@@ -1,5 +1,5 @@
 // Service Worker for PULSO Offline-First Operation
-const CACHE_NAME = 'pulso-v1';
+const CACHE_NAME = 'pulso-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -9,7 +9,21 @@ const PRECACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
+    (async () => {
+      const indexResponse = await fetch('/index.html', { cache: 'no-store' });
+      if (!indexResponse.ok) {
+        throw new Error(`Unable to precache app shell: HTTP ${indexResponse.status}`);
+      }
+
+      const html = await indexResponse.text();
+      const assetPaths = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css)(?:\?[^"]*)?)"/g)]
+        .map((match) => new URL(match[1], self.location.origin))
+        .filter((url) => url.origin === self.location.origin)
+        .map((url) => url.pathname + url.search);
+
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll([...new Set([...PRECACHE_ASSETS, ...assetPaths])]);
+    })()
   );
   self.skipWaiting();
 });
@@ -18,7 +32,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.filter((key) => key.startsWith('pulso-') && key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     )
   );
@@ -26,18 +40,30 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const requestUrl = new URL(event.request.url);
+  if (
+    event.request.method !== 'GET' ||
+    requestUrl.origin !== self.location.origin ||
+    requestUrl.pathname.startsWith('/api/')
+  ) return;
   event.respondWith(
     fetch(event.request)
-      .then((networkResponse) => {
+      .then(async (networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, networkResponse.clone());
+          } catch (error) {
+            console.error('Failed to update PULSO cache', error);
+          }
         }
         return networkResponse;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async (networkError) => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        throw networkError;
+      })
   );
 });
